@@ -25,3 +25,13 @@ Regenerate it locally when needed:
 ```bash
 android/scripts/regenerate_wrapper.sh
 ```
+
+## Backend verification quickstart
+
+```bash
+cd backend
+npm ci
+npm test
+```
+
+The backend test suite validates lifecycle invariants, auth-protected mutating routes, idempotent escrow release, and DTO response shape behavior.
