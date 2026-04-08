@@ -1,0 +1,8 @@
+CREATE TABLE messages (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  violation_detected BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

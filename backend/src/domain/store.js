@@ -1,0 +1,43 @@
+const nowIso = () => new Date().toISOString();
+
+const db = {
+  sessions: [],
+  worker_profiles: [],
+  businesses: [],
+  locations: [],
+  shifts: [],
+  applications: [],
+  assignments: [],
+  attendance_events: [],
+  ratings: [],
+  chats: [],
+  messages: [],
+  escrow_accounts: [],
+  escrow_transactions: [],
+  payouts: [],
+  violation_flags: []
+};
+
+let nextId = 1;
+const id = (prefix) => `${prefix}_${nextId++}`;
+
+function seed() {
+  if (db.worker_profiles.length) return;
+  db.worker_profiles.push({ id: 'worker_1', user_id: 'u_worker_1', name: 'Alex Cook', rating_avg: 4.8 });
+  db.businesses.push({ id: 'biz_1', user_id: 'u_biz_1', name: 'Kitchen Hub' });
+  db.locations.push({ id: 'loc_1', business_id: 'biz_1', name: 'Downtown Kitchen', address: '100 Main St' });
+  db.escrow_accounts.push({ id: 'escrow_biz_1', business_id: 'biz_1', balance_cents: 500000 });
+  db.shifts.push({
+    id: 'shift_1',
+    business_id: 'biz_1',
+    location_id: 'loc_1',
+    title: 'Line Cook',
+    start_at: new Date(Date.now() + 3600_000).toISOString(),
+    end_at: new Date(Date.now() + 5 * 3600_000).toISOString(),
+    pay_rate_cents: 2500,
+    status: 'open',
+    created_at: nowIso()
+  });
+}
+
+module.exports = { db, id, nowIso, seed };

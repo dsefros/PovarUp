@@ -1,0 +1,7 @@
+CREATE TABLE chats (
+  id TEXT PRIMARY KEY,
+  assignment_id TEXT NOT NULL UNIQUE,
+  worker_id TEXT NOT NULL,
+  business_id TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

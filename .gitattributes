@@ -1,0 +1,21 @@
+# Binary file hints to keep diffs/review tools sane.
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.keystore binary
+*.jks binary
+*.p12 binary
+*.ico binary
+*.so binary
+*.a binary
+*.o binary
+*.class binary
+*.dex binary
+*.apk binary
+*.aab binary
+*.bin binary
+*.zip binary

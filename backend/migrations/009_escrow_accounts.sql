@@ -1,0 +1,6 @@
+CREATE TABLE escrow_accounts (
+  id TEXT PRIMARY KEY,
+  business_id TEXT NOT NULL UNIQUE,
+  balance_cents INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
