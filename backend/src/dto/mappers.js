@@ -33,4 +33,24 @@ function shiftDto(s) {
   };
 }
 
-module.exports = { assignmentDto, messageDto, shiftDto };
+function applicationDto(a) {
+  return {
+    id: a.id,
+    shiftId: a.shift_id,
+    workerId: a.worker_id,
+    status: a.status
+  };
+}
+
+function payoutDto(p) {
+  return {
+    id: p.id,
+    assignmentId: p.assignment_id,
+    workerId: p.worker_id,
+    amountCents: p.amount_cents,
+    status: p.status,
+    createdAt: p.created_at
+  };
+}
+
+module.exports = { assignmentDto, messageDto, shiftDto, applicationDto, payoutDto };

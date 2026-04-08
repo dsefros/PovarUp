@@ -1,11 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { db, seed } = require('../src/domain/store');
+const { db, resetDb } = require('./helpers/testContext');
 const svc = require('../src/services/marketplaceService');
 
 function prep() {
-  Object.keys(db).forEach((k) => (db[k].length = 0));
-  seed();
+  resetDb();
   const app = svc.applyToShift('shift_1', 'worker_1');
   const asn = svc.offerAssignment(app.id, 'biz_1');
   svc.acceptAssignment(asn.id);

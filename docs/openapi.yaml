@@ -5,6 +5,21 @@ info:
 servers:
   - url: http://localhost:4000/api
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated but not authorized for this resource
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
   schemas:
     Error:
       type: object
@@ -30,8 +45,8 @@ components:
       type: object
       properties:
         id: { type: string }
-        shift_id: { type: string }
-        worker_id: { type: string }
+        shiftId: { type: string }
+        workerId: { type: string }
         status: { type: string }
     Assignment:
       type: object
@@ -83,7 +98,15 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Shift' } } } }
       responses: { '201': { description: created } }
   /applications:
-    get: { responses: { '200': { description: list apps } } }
+    get:
+      description: |
+        Returns only applications relevant to the authenticated actor (worker owns application,
+        business owns related shift) unless role is admin.
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: list apps }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       requestBody:
         required: true
@@ -94,7 +117,12 @@ paths:
               properties: { shiftId: { type: string }, workerId: { type: string } }
       responses: { '201': { description: created } }
   /assignments:
-    get: { responses: { '200': { description: list assignments } } }
+    get:
+      description: Returns assignment list filtered to caller ownership; non-owners receive an empty list.
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: list assignments }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /assignments/offer:
     post:
       requestBody:
@@ -128,13 +156,21 @@ paths:
   /contacts/reveal/{assignmentId}:
     get:
       parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
-      responses: { '200': { description: masked contact relay } }
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: masked contact relay }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /escrow/fund:
     post: { responses: { '201': { description: funded } } }
   /escrow/balance/{businessId}:
     get:
       parameters: [{ name: businessId, in: path, required: true, schema: { type: string } }]
-      responses: { '200': { description: balance } }
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: balance }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /escrow/release/{assignmentId}:
     post:
       parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
