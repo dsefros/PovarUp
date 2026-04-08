@@ -1,0 +1,11 @@
+{
+  "name": "povarup-backend",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {}
+}

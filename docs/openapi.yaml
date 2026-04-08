@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: PovarUp Marketplace API
+  version: 1.0.0
+servers:
+  - url: http://localhost:4000/api
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: {}
+    Shift:
+      type: object
+      properties:
+        id: { type: string }
+        businessId: { type: string }
+        locationId: { type: string }
+        title: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        payRateCents: { type: integer }
+        status: { type: string }
+    Application:
+      type: object
+      properties:
+        id: { type: string }
+        shift_id: { type: string }
+        worker_id: { type: string }
+        status: { type: string }
+    Assignment:
+      type: object
+      properties:
+        id: { type: string }
+        shiftId: { type: string }
+        workerId: { type: string }
+        businessId: { type: string }
+        status: { type: string }
+        escrowLockedCents: { type: integer }
+    Message:
+      type: object
+      properties:
+        id: { type: string }
+        chatId: { type: string }
+        senderId: { type: string }
+        text: { type: string }
+        createdAt: { type: string, format: date-time }
+        violationDetected: { type: boolean }
+paths:
+  /health:
+    get:
+      responses: { '200': { description: ok } }
+  /ready:
+    get:
+      responses: { '200': { description: ready } }
+  /seed:
+    post:
+      responses: { '200': { description: seeded } }
+  /auth/session:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { userId: { type: string }, role: { type: string } }
+      responses: { '200': { description: session } }
+  /workers:
+    get: { responses: { '200': { description: list workers } } }
+  /businesses:
+    get: { responses: { '200': { description: list businesses } } }
+  /shifts:
+    get:
+      responses:
+        '200': { description: list shifts, content: { application/json: { schema: { type: object } } } }
+    post:
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Shift' } } } }
+      responses: { '201': { description: created } }
+  /applications:
+    get: { responses: { '200': { description: list apps } } }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { shiftId: { type: string }, workerId: { type: string } }
+      responses: { '201': { description: created } }
+  /assignments:
+    get: { responses: { '200': { description: list assignments } } }
+  /assignments/offer:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { applicationId: { type: string }, businessId: { type: string } } }
+      responses: { '201': { description: offered } }
+  /assignments/{id}/accept:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: accepted } }
+  /attendance/check-in:
+    post: { responses: { '201': { description: check-in } } }
+  /attendance/check-out:
+    post: { responses: { '201': { description: check-out } } }
+  /ratings:
+    post: { responses: { '201': { description: rating saved } } }
+  /chats/by-assignment/{assignmentId}:
+    get:
+      parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: chat } }
+  /chats/{chatId}/messages:
+    get:
+      parameters: [{ name: chatId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: messages } }
+  /chats/{assignmentId}/messages:
+    post:
+      parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
+      responses: { '201': { description: sent } }
+  /contacts/reveal/{assignmentId}:
+    get:
+      parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: masked contact relay } }
+  /escrow/fund:
+    post: { responses: { '201': { description: funded } } }
+  /escrow/balance/{businessId}:
+    get:
+      parameters: [{ name: businessId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: balance } }
+  /escrow/release/{assignmentId}:
+    post:
+      parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
+      responses: { '201': { description: released } }
+  /payouts/{workerId}:
+    get:
+      parameters: [{ name: workerId, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: payouts } }
+  /violation-flags:
+    get: { responses: { '200': { description: list flags } } }

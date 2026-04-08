@@ -1,0 +1,7 @@
+CREATE TABLE worker_profiles (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  rating_avg NUMERIC DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
