@@ -1,8 +1,22 @@
-const { db, seed } = require('../../src/domain/store');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { createServer } = require('../../src/server');
 
-function resetDb() {
-  Object.keys(db).forEach((k) => (db[k].length = 0));
-  seed();
+function tempDbPath() {
+  return path.join(os.tmpdir(), `povarup-test-${Date.now()}-${Math.random().toString(16).slice(2)}.sqlite`);
 }
 
-module.exports = { db, resetDb };
+function buildTestRuntime() {
+  const dbPath = tempDbPath();
+  const { server, runtime } = createServer({ persistence: 'sql', dbPath });
+
+  function cleanup() {
+    if (runtime.database) runtime.database.close();
+    if (fs.existsSync(dbPath)) fs.rmSync(dbPath, { force: true });
+  }
+
+  return { server, runtime, dbPath, cleanup };
+}
+
+module.exports = { buildTestRuntime };

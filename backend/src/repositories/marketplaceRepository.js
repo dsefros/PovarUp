@@ -2,6 +2,7 @@ const { db } = require('../domain/store');
 
 function createMarketplaceRepository(store = db) {
   return {
+    withTransaction: (run) => run(),
     listWorkers: () => store.worker_profiles,
     listBusinesses: () => store.businesses,
     listShifts: () => store.shifts,

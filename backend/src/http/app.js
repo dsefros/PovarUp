@@ -1,5 +1,4 @@
 const { URL } = require('node:url');
-const svc = require('../services/marketplaceService');
 const { id } = require('../domain/store');
 const { send, parseBody } = require('./http');
 const { requireAuth, createSession } = require('./auth');
@@ -31,7 +30,7 @@ function canAccessApplication(actor, application, repo) {
   }
   return false;
 }
-function createApp({ repo, seed }) {
+function createApp({ repo, seed, service }) {
   return async function app(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const path = url.pathname;
@@ -50,7 +49,7 @@ function createApp({ repo, seed }) {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'business' || !actor.business) throw error('forbidden', 'Only business users can create shifts', { status: 403 });
       const b = await parseBody(req);
-      const item = svc.createShift({ ...b, businessId: actor.business.id });
+      const item = service.createShift({ ...b, businessId: actor.business.id });
       return send(res, 201, { item: shiftDto(item) });
     }
 
@@ -63,7 +62,7 @@ function createApp({ repo, seed }) {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'worker' || !actor.worker) throw error('forbidden', 'Only workers can apply', { status: 403 });
       const b = await parseBody(req);
-      const item = svc.applyToShift(b.shiftId, actor.worker.id);
+      const item = service.applyToShift(b.shiftId, actor.worker.id);
       return send(res, 201, { item: applicationDto(item) });
     }
 
@@ -77,7 +76,7 @@ function createApp({ repo, seed }) {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'business' || !actor.business) throw error('forbidden', 'Only businesses can offer', { status: 403 });
       const b = await parseBody(req);
-      return send(res, 201, { item: assignmentDto(svc.offerAssignment(b.applicationId, actor.business.id)) });
+      return send(res, 201, { item: assignmentDto(service.offerAssignment(b.applicationId, actor.business.id)) });
     }
 
     if (path.match(/^\/api\/assignments\/[^/]+\/accept$/) && method === 'POST') {
@@ -87,7 +86,7 @@ function createApp({ repo, seed }) {
       if (actor.session.role !== 'worker' || !actor.worker || !assignment || assignment.worker_id !== actor.worker.id) {
         throw error('forbidden', 'Only assigned worker can accept', { status: 403 });
       }
-      return send(res, 200, { item: assignmentDto(svc.acceptAssignment(aid)) });
+      return send(res, 200, { item: assignmentDto(service.acceptAssignment(aid)) });
     }
 
     if (path === '/api/attendance/check-in' && method === 'POST') {
@@ -97,7 +96,7 @@ function createApp({ repo, seed }) {
       if (actor.session.role !== 'worker' || !actor.worker || !assignment || assignment.worker_id !== actor.worker.id) {
         throw error('forbidden', 'Only assigned worker can check in', { status: 403 });
       }
-      return send(res, 201, { item: svc.attendance(b.assignmentId, 'check_in') });
+      return send(res, 201, { item: service.attendance(b.assignmentId, 'check_in') });
     }
 
     if (path === '/api/attendance/check-out' && method === 'POST') {
@@ -107,7 +106,7 @@ function createApp({ repo, seed }) {
       if (actor.session.role !== 'worker' || !actor.worker || !assignment || assignment.worker_id !== actor.worker.id) {
         throw error('forbidden', 'Only assigned worker can check out', { status: 403 });
       }
-      return send(res, 201, { item: svc.attendance(b.assignmentId, 'check_out') });
+      return send(res, 201, { item: service.attendance(b.assignmentId, 'check_out') });
     }
 
     if (path === '/api/ratings' && method === 'POST') {
@@ -117,7 +116,7 @@ function createApp({ repo, seed }) {
       if (!canAccessAssignment(actor, assignment)) throw error('forbidden', 'Only assignment participants can rate', { status: 403 });
       if (actor.session.role === 'worker' && b.fromRole !== 'worker') throw error('forbidden', 'Worker must rate as worker', { status: 403 });
       if (actor.session.role === 'business' && b.fromRole !== 'business') throw error('forbidden', 'Business must rate as business', { status: 403 });
-      return send(res, 201, { item: svc.addRating(b.assignmentId, b.fromRole, b.score, b.note) });
+      return send(res, 201, { item: service.addRating(b.assignmentId, b.fromRole, b.score, b.note) });
     }
 
     if (path.match(/^\/api\/chats\/by-assignment\//) && method === 'GET') {
@@ -125,7 +124,7 @@ function createApp({ repo, seed }) {
       const assignmentId = path.split('/')[4];
       const assignment = repo.findAssignmentById(assignmentId);
       if (!canAccessAssignment(actor, assignment)) throw error('forbidden', 'Chat access denied', { status: 403 });
-      return send(res, 200, { item: svc.getChatByAssignment(assignmentId) });
+      return send(res, 200, { item: service.getChatByAssignment(assignmentId) });
     }
 
     if (path.match(/^\/api\/chats\/[^/]+\/messages$/) && method === 'GET') {
@@ -144,7 +143,7 @@ function createApp({ repo, seed }) {
       if (!canAccessAssignment(actor, assignment)) throw error('forbidden', 'Messages access denied', { status: 403 });
       const b = await parseBody(req);
       const senderId = actor.worker?.id || actor.business?.id;
-      return send(res, 201, { item: messageDto(svc.sendMessage(assignmentId, senderId, b.text)) });
+      return send(res, 201, { item: messageDto(service.sendMessage(assignmentId, senderId, b.text)) });
     }
 
     if (path.match(/^\/api\/contacts\/reveal\//) && method === 'GET') {
@@ -152,14 +151,14 @@ function createApp({ repo, seed }) {
       const assignmentId = path.split('/')[4];
       const assignment = repo.findAssignmentById(assignmentId);
       if (!canAccessAssignment(actor, assignment)) throw error('forbidden', 'Contact reveal access denied', { status: 403 });
-      return send(res, 200, { item: svc.revealContacts(assignmentId, url.searchParams.get('stage') || 'accepted') });
+      return send(res, 200, { item: service.revealContacts(assignmentId, url.searchParams.get('stage') || 'accepted') });
     }
 
     if (path === '/api/escrow/fund' && method === 'POST') {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'business' || !actor.business) throw error('forbidden', 'Only business can fund escrow', { status: 403 });
       const b = await parseBody(req);
-      return send(res, 201, { item: svc.fundEscrow(actor.business.id, b.amountCents) });
+      return send(res, 201, { item: service.fundEscrow(actor.business.id, b.amountCents) });
     }
 
     if (path.match(/^\/api\/escrow\/balance\//) && method === 'GET') {
@@ -178,7 +177,7 @@ function createApp({ repo, seed }) {
         throw error('forbidden', 'Only assignment business can release escrow', { status: 403 });
       }
       const b = await parseBody(req);
-      return send(res, 201, { item: payoutDto(svc.releasePayment(assignmentId, b.force === true)) });
+      return send(res, 201, { item: payoutDto(service.releasePayment(assignmentId, b.force === true)) });
     }
 
     if (path.match(/^\/api\/payouts\//) && method === 'GET') {

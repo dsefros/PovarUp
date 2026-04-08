@@ -1,32 +1,40 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { db, resetDb } = require('./helpers/testContext');
-const svc = require('../src/services/marketplaceService');
+const { buildTestRuntime } = require('./helpers/testContext');
 
-function setupComplete() {
-  resetDb();
+function setupComplete(runtime) {
+  const svc = runtime.service;
+  const repo = runtime.repo;
   const app = svc.applyToShift('shift_1', 'worker_1');
   const asn = svc.offerAssignment(app.id, 'biz_1');
   svc.acceptAssignment(asn.id);
-  const shift = db.shifts.find((s) => s.id === 'shift_1');
-  shift.start_at = new Date(Date.now() - 10 * 60000).toISOString();
-  shift.end_at = new Date(Date.now() + 3600_000).toISOString();
+  repo.updateShiftTimes('shift_1', new Date(Date.now() - 10 * 60000).toISOString(), new Date(Date.now() + 3600_000).toISOString());
   svc.attendance(asn.id, 'check_in');
   svc.attendance(asn.id, 'check_out');
   return asn.id;
 }
 
 test('release creates payout', () => {
-  const assignmentId = setupComplete();
-  const payout = svc.releasePayment(assignmentId);
-  assert.equal(payout.assignment_id, assignmentId);
-  assert.equal(db.payouts.length, 1);
+  const { runtime, cleanup } = buildTestRuntime();
+  try {
+    const assignmentId = setupComplete(runtime);
+    const payout = runtime.service.releasePayment(assignmentId);
+    assert.equal(payout.assignment_id, assignmentId);
+    assert.equal(runtime.repo.listPayoutsByWorkerId('worker_1').length, 1);
+  } finally {
+    cleanup();
+  }
 });
 
 test('release is idempotent by assignment', () => {
-  const assignmentId = setupComplete();
-  const p1 = svc.releasePayment(assignmentId);
-  const p2 = svc.releasePayment(assignmentId);
-  assert.equal(p1.id, p2.id);
-  assert.equal(db.payouts.length, 1);
+  const { runtime, cleanup } = buildTestRuntime();
+  try {
+    const assignmentId = setupComplete(runtime);
+    const p1 = runtime.service.releasePayment(assignmentId);
+    const p2 = runtime.service.releasePayment(assignmentId);
+    assert.equal(p1.id, p2.id);
+    assert.equal(runtime.repo.listPayoutsByWorkerId('worker_1').length, 1);
+  } finally {
+    cleanup();
+  }
 });
