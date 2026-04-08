@@ -1,24 +1,59 @@
 const http = require('node:http');
+const path = require('node:path');
 const { seed } = require('./domain/store');
 const { createMarketplaceRepository } = require('./repositories/marketplaceRepository');
+const { createSqlMarketplaceRepository } = require('./repositories/sqlMarketplaceRepository');
+const { createSqliteDatabase } = require('./domain/sqlite');
+const { createMarketplaceService } = require('./services/marketplaceService');
 const { createApp } = require('./http/app');
 const { handleError } = require('./http/http');
 
-seed();
-const repo = createMarketplaceRepository();
-const app = createApp({ repo, seed });
-
-const server = http.createServer(async (req, res) => {
-  try {
-    await app(req, res);
-  } catch (err) {
-    handleError(res, err);
-  }
-});
-
-if (require.main === module) {
-  const port = process.env.PORT || 4000;
-  server.listen(port, () => console.log(`Backend listening on ${port}`));
+function createSqlSeed(database) {
+  return () => {
+    database.exec(`
+      INSERT OR IGNORE INTO worker_profiles (id, user_id, name, rating_avg) VALUES ('worker_1', 'u_worker_1', 'Alex Cook', 4.8);
+      INSERT OR IGNORE INTO businesses (id, user_id, name) VALUES ('biz_1', 'u_biz_1', 'Kitchen Hub');
+      INSERT OR IGNORE INTO locations (id, business_id, name, address) VALUES ('loc_1', 'biz_1', 'Downtown Kitchen', '100 Main St');
+      INSERT OR IGNORE INTO escrow_accounts (id, business_id, balance_cents) VALUES ('escrow_biz_1', 'biz_1', 500000);
+      INSERT OR IGNORE INTO shifts (id, business_id, location_id, title, start_at, end_at, pay_rate_cents, status, created_at)
+      VALUES ('shift_1', 'biz_1', 'loc_1', 'Line Cook', datetime('now', '+1 hour'), datetime('now', '+5 hour'), 2500, 'open', CURRENT_TIMESTAMP);
+    `);
+  };
 }
 
-module.exports = server;
+function resolveRuntime(overrides = {}) {
+  const persistence = (overrides.persistence || process.env.POVARUP_PERSISTENCE || 'sql').toLowerCase();
+  if (persistence === 'memory') {
+    seed();
+    const repo = createMarketplaceRepository();
+    return { repo, seed, service: createMarketplaceService(repo), persistence: 'memory' };
+  }
+
+  const dbFile = overrides.dbPath || process.env.POVARUP_DB_PATH || path.resolve(__dirname, '../data/povarup.sqlite');
+  const database = createSqliteDatabase(dbFile);
+  const repo = createSqlMarketplaceRepository(database);
+  const sqlSeed = createSqlSeed(database);
+  sqlSeed();
+  return { repo, seed: sqlSeed, service: createMarketplaceService(repo), persistence: 'sql', database };
+}
+
+function createServer(overrides = {}) {
+  const runtime = resolveRuntime(overrides);
+  const app = createApp({ repo: runtime.repo, seed: runtime.seed, service: runtime.service });
+  const server = http.createServer(async (req, res) => {
+    try {
+      await app(req, res);
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+  return { server, runtime };
+}
+
+if (require.main === module) {
+  const { server, runtime } = createServer();
+  const port = process.env.PORT || 4000;
+  server.listen(port, () => console.log(`Backend listening on ${port} (${runtime.persistence})`));
+}
+
+module.exports = { createServer, resolveRuntime };

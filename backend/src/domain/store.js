@@ -1,3 +1,5 @@
+const { randomUUID } = require('node:crypto');
+
 const nowIso = () => new Date().toISOString();
 
 const db = {
@@ -18,8 +20,7 @@ const db = {
   violation_flags: []
 };
 
-let nextId = 1;
-const id = (prefix) => `${prefix}_${nextId++}`;
+const id = (prefix) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 10)}`;
 
 function seed() {
   if (db.worker_profiles.length) return;

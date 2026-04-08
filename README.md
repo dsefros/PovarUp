@@ -34,4 +34,24 @@ npm ci
 npm test
 ```
 
-The backend test suite validates lifecycle invariants, auth-protected mutating routes, idempotent escrow release, and DTO response shape behavior.
+The backend now runs with SQL persistence by default (`POVARUP_PERSISTENCE=sql`) and stores data at `backend/data/povarup.sqlite` unless `POVARUP_DB_PATH` is set.
+
+Run backend in SQL mode explicitly:
+
+```bash
+cd backend
+POVARUP_PERSISTENCE=sql POVARUP_DB_PATH=./data/povarup.sqlite npm run dev
+```
+
+For local memory-only fallback (non-persistent):
+
+```bash
+cd backend
+POVARUP_PERSISTENCE=memory npm run dev
+```
+
+The backend test suite validates lifecycle invariants, auth-protected mutating routes, idempotent escrow release, DTO response shape behavior, and SQL-backed persistence across server restarts.
+
+Schema ownership note: runtime application tables are migration-owned (`backend/migrations/*.sql`). The runtime bootstrap seeds data only and does not define domain tables.
+
+SQLite runtime stance: this project currently uses Node's built-in `node:sqlite` API (experimental in Node 22) for local and CI persistence verification. Treat this as acceptable for current development/test usage; if production hardening requires non-experimental DB APIs, switch to a stable driver before production rollout.

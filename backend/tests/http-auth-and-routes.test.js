@@ -1,19 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const server = require('../src/server');
-const { resetDb } = require('./helpers/testContext');
-const svc = require('../src/services/marketplaceService');
+const { buildTestRuntime } = require('./helpers/testContext');
 
 async function withServer(run) {
-  resetDb();
-  const app = svc.applyToShift('shift_1', 'worker_1');
-  const asn = svc.offerAssignment(app.id, 'biz_1');
+  const { server, runtime, cleanup } = buildTestRuntime();
+  const app = runtime.service.applyToShift('shift_1', 'worker_1');
+  const asn = runtime.service.offerAssignment(app.id, 'biz_1');
   await new Promise((resolve) => server.listen(0, resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    await run(base, asn.id);
+    await run(base, asn.id, runtime);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+    cleanup();
   }
 }
 
@@ -116,7 +115,7 @@ test('chat message sender identity is derived from session and cannot be spoofed
 });
 
 test('sensitive reads enforce authorization', async () => {
-  await withServer(async (base, assignmentId) => {
+  await withServer(async (base, assignmentId, runtime) => {
     const worker = await createSession(base, 'u_worker_1', 'worker');
     const biz = await createSession(base, 'u_biz_1', 'business');
     const outsider = await createSession(base, 'u_other', 'worker');
@@ -168,7 +167,7 @@ test('sensitive reads enforce authorization', async () => {
     });
     assert.equal(outsiderContacts.status, 403);
 
-    svc.acceptAssignment(assignmentId);
+    runtime.service.acceptAssignment(assignmentId);
     const ownerContacts = await fetch(`${base}/api/contacts/reveal/${assignmentId}`, {
       headers: { authorization: `Bearer ${worker.token}` }
     });
