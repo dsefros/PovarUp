@@ -10,6 +10,5 @@ fun ShiftDto.toDomain(): Shift = Shift(
     startAt = startAt,
     endAt = endAt,
     payRateCents = payRateCents,
-    status = status,
-    createdAt = createdAt
+    status = status
 )

@@ -11,7 +11,7 @@ cat > "$TMP_BUILD" <<'GRADLE'
 // Empty bootstrap build file for running wrapper task only.
 GRADLE
 
-gradle -p "$ROOT_DIR" -b "$TMP_BUILD" wrapper --gradle-version 8.7
+gradle -p "$ROOT_DIR" -b "$TMP_BUILD" wrapper --gradle-version 8.7 --distribution-type bin
 rm -f "$TMP_BUILD"
 
 echo "Wrapper regenerated under $ROOT_DIR/gradle/wrapper/."

@@ -1,6 +1,6 @@
 package com.povarup.core
 
-import com.povarup.data.InMemoryMarketplaceRepository
+import com.povarup.data.ApiMarketplaceRepository
 import com.povarup.data.MarketplaceRepository
 
 data class RoleState(
@@ -8,7 +8,7 @@ data class RoleState(
     val baseUrl: String
 )
 
-class RoleStateHolder(private val repository: MarketplaceRepository = InMemoryMarketplaceRepository()) {
+class RoleStateHolder(private val repository: MarketplaceRepository = ApiMarketplaceRepository()) {
     fun current(): RoleState = RoleState(role = repository.currentRole(), baseUrl = repository.baseUrl())
     fun switch(role: String) = repository.setRole(role)
 }
