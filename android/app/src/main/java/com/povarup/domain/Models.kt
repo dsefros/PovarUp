@@ -10,3 +10,10 @@ data class Shift(
     val payRateCents: Int,
     val status: String
 )
+
+data class Application(
+    val id: String,
+    val shiftId: String,
+    val workerId: String,
+    val status: String
+)

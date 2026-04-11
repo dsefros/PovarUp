@@ -2,6 +2,7 @@ package com.povarup
 
 import com.povarup.data.SessionDto
 import com.povarup.data.ShiftDto
+import com.povarup.data.ApplicationDto
 import com.povarup.data.toDomain
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -34,5 +35,15 @@ class MapperTest {
         assertEquals("sess_1", model.token)
         assertEquals("u_worker_1", model.userId)
         assertEquals("worker", model.role)
+    }
+
+    @Test
+    fun mapApplicationDtoToDomain() {
+        val dto = ApplicationDto(id = "app_1", shiftId = "shift_1", workerId = "worker_1", status = "pending")
+
+        val model = dto.toDomain()
+        assertEquals("app_1", model.id)
+        assertEquals("shift_1", model.shiftId)
+        assertEquals("pending", model.status)
     }
 }

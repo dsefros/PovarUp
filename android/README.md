@@ -38,10 +38,12 @@ If you need wrapper binaries locally:
 android/scripts/regenerate_wrapper.sh
 ```
 
-This regenerates wrapper files using local Gradle and writes the JAR under `android/gradle/wrapper/` (ignored by git).
+This regenerates wrapper files using local Gradle (`--no-validate-url` to avoid network URL checks) and writes the JAR under `android/gradle/wrapper/` (ignored by git).
+
+`./gradlew` in this repo defaults to system Gradle (`POVARUP_USE_SYSTEM_GRADLE=1`) so local validation can run in restricted/proxied environments without downloading a wrapper distribution.
 
 ## Build
-After regenerating wrapper locally (and with SDK configured):
+With SDK configured (and optional `local.properties` set), run:
 
 ```bash
 cd android

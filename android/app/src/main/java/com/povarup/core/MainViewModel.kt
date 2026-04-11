@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.povarup.data.ApiMarketplaceRepository
 import com.povarup.data.MarketplaceRepository
+import com.povarup.domain.Shift
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,9 @@ data class MainUiState(
     val sessionUserId: String? = null,
     val hasSession: Boolean = false,
     val sessionStatusMessage: String? = null,
-    val shiftsCount: Int? = null,
+    val shifts: List<Shift> = emptyList(),
+    val selectedShiftId: String? = null,
+    val applyStatusMessage: String? = null,
     val errorMessage: String? = null,
     val isLoading: Boolean = false
 )
@@ -81,19 +84,60 @@ class MainViewModel(
 
     fun clearSession() {
         repository.clearSession()
-        _uiState.value = _uiState.value.copy(hasSession = false, sessionUserId = null, sessionStatusMessage = "Session cleared")
+        _uiState.value = _uiState.value.copy(
+            hasSession = false,
+            sessionUserId = null,
+            sessionStatusMessage = "Session cleared",
+            applyStatusMessage = null
+        )
     }
 
     fun refreshShifts() {
-        _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+        _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, applyStatusMessage = null)
         viewModelScope.launch(dispatchers.io) {
             val result = repository.listShifts()
             _uiState.value = result.fold(
                 onSuccess = { shifts ->
-                    _uiState.value.copy(shiftsCount = shifts.size, isLoading = false)
+                    _uiState.value.copy(
+                        shifts = shifts,
+                        selectedShiftId = shifts.firstOrNull()?.id,
+                        isLoading = false
+                    )
                 },
                 onFailure = { err ->
                     _uiState.value.copy(errorMessage = err.message ?: "Failed to load shifts", isLoading = false)
+                }
+            )
+        }
+    }
+
+    fun applyToShift(shiftId: String) {
+        val trimmedShiftId = shiftId.trim()
+        if (trimmedShiftId.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Enter a shift id first", applyStatusMessage = null)
+            return
+        }
+        _uiState.value = _uiState.value.copy(
+            selectedShiftId = trimmedShiftId,
+            isLoading = true,
+            errorMessage = null,
+            applyStatusMessage = null
+        )
+        viewModelScope.launch(dispatchers.io) {
+            val result = repository.applyToShift(trimmedShiftId)
+            _uiState.value = result.fold(
+                onSuccess = { application ->
+                    _uiState.value.copy(
+                        applyStatusMessage = "Applied to shift ${application.shiftId} (${application.status})",
+                        isLoading = false
+                    )
+                },
+                onFailure = { err ->
+                    _uiState.value.copy(
+                        errorMessage = err.message ?: "Failed to apply",
+                        applyStatusMessage = "Application failed",
+                        isLoading = false
+                    )
                 }
             )
         }
