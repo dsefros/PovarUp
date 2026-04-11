@@ -24,7 +24,9 @@ data class ShiftDto(
     val startAt: String,
     val endAt: String,
     val payRateCents: Int,
-    val status: String
+    val status: String,
+    val normalizedStatus: String? = null,
+    val productStatus: String? = null
 )
 
 data class CreateApplicationRequest(val shiftId: String)
@@ -33,12 +35,14 @@ data class ApplicationDto(
     val id: String,
     val shiftId: String,
     val workerId: String,
-    val status: String
+    val status: String,
+    val normalizedStatus: String? = null,
+    val productStatus: String? = null
 )
 
 data class LoginRequest(val userId: String, val password: String)
 
-data class SessionDto(val token: String, val userId: String, val role: String, val displayName: String? = null)
+data class SessionDto(val token: String, val userId: String, val role: String, val displayName: String? = null, val expiresAt: String? = null)
 
 data class SessionToken(val token: String, val userId: String, val role: String)
 
@@ -48,6 +52,8 @@ data class AssignmentDto(
     val workerId: String,
     val businessId: String,
     val status: String,
+    val normalizedStatus: String? = null,
+    val productStatus: String? = null,
     val escrowLockedCents: Int
 )
 
@@ -69,5 +75,16 @@ data class PayoutDto(
     val workerId: String,
     val amountCents: Int,
     val status: String,
-    val createdAt: String
+    val internalStatus: String? = null,
+    val createdAt: String,
+    val updatedAt: String? = null,
+    val note: String? = null
+)
+
+data class UpdatePayoutStatusRequest(val status: String, val note: String? = null)
+
+data class ProblemCasesDto(
+    val flags: List<Map<String, Any?>> = emptyList(),
+    val failedPayouts: List<PayoutDto> = emptyList(),
+    val stalledAssignments: List<AssignmentDto> = emptyList()
 )

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.povarup.data.ApiMarketplaceRepository
 import com.povarup.data.CreateShiftRequest
 import com.povarup.data.MarketplaceRepository
+import com.povarup.data.ProblemCasesDto
 import com.povarup.domain.Application
 import com.povarup.domain.Assignment
 import com.povarup.domain.Payout
@@ -32,6 +33,9 @@ data class MainUiState(
     val applications: List<Application> = emptyList(),
     val assignments: List<Assignment> = emptyList(),
     val payouts: List<Payout> = emptyList(),
+    val adminAssignments: List<Assignment> = emptyList(),
+    val adminPayouts: List<Payout> = emptyList(),
+    val adminProblemCases: ProblemCasesDto = ProblemCasesDto(),
     val selectedShiftId: String? = null,
     val selectedAssignmentId: String? = null,
     val statusMessage: String? = null,
@@ -58,6 +62,10 @@ class MainViewModel(
 
     fun login(userId: String, password: String) {
         runAsync("login", "Logged in") { repository.login(userId.trim(), password.trim()) }
+    }
+
+    fun logout() {
+        runAsync("logout", "Logged out") { repository.logout() }
     }
 
     fun setSelectedShift(shiftId: String) {
@@ -115,6 +123,11 @@ class MainViewModel(
         runAsync("release:${assignmentId.trim()}", "Payout released") { repository.releasePayout(assignmentId.trim()) }
     }
 
+    fun progressAdminPayout(payoutId: String, status: String) {
+        if (!guardRole("admin", "Only admins can progress payout status.")) return
+        runAsync("admin_payout:$payoutId:$status", "Payout moved to $status") { repository.updateAdminPayoutStatus(payoutId.trim(), status) }
+    }
+
     fun createShift(title: String, locationId: String, payRateCents: Int) {
         if (!guardRole("business", "Only businesses can create shifts.")) return
         runAsync("create_shift", "Shift created") {
@@ -142,6 +155,9 @@ class MainViewModel(
             applications = emptyList(),
             assignments = emptyList(),
             payouts = emptyList(),
+            adminAssignments = emptyList(),
+            adminPayouts = emptyList(),
+            adminProblemCases = ProblemCasesDto(),
             importantEvents = emptyList()
         )
     }
@@ -220,6 +236,10 @@ class MainViewModel(
         }
         val payouts = payoutsResult.getOrThrow()
 
+        val adminAssignments = if (role == "admin") repository.listAdminAssignments().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else emptyList()
+        val adminPayouts = if (role == "admin") repository.listAdminPayouts().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else emptyList()
+        val adminProblemCases = if (role == "admin") repository.getAdminProblemCases().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else ProblemCasesDto()
+
         _uiState.value = _uiState.value.copy(
             role = role,
             hasSession = repository.currentSession() != null,
@@ -228,6 +248,9 @@ class MainViewModel(
             applications = applications,
             assignments = assignments,
             payouts = payouts,
+            adminAssignments = adminAssignments,
+            adminPayouts = adminPayouts,
+            adminProblemCases = adminProblemCases,
             selectedShiftId = effectiveShiftId,
             selectedAssignmentId = assignments.firstOrNull()?.id,
             errorMessage = null,
@@ -246,22 +269,22 @@ class MainViewModel(
         val shiftById = shifts.associateBy { it.id }
         val events = mutableListOf<String>()
 
-        assignments.filter { it.status == "offered" }.forEach { assignment ->
+        assignments.filter { it.productStatus == "offered" }.forEach { assignment ->
             val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
             events += "Offer received: $shiftTitle (${assignment.id})."
         }
 
-        assignments.filter { it.status == "active" }.forEach { assignment ->
+        assignments.filter { it.productStatus == "active" }.forEach { assignment ->
             val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
             events += "Offer accepted: $shiftTitle (${assignment.id})."
         }
 
-        assignments.filter { it.status == "in_progress" }.forEach { assignment ->
+        assignments.filter { it.productStatus == "checked_in" }.forEach { assignment ->
             val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
             events += "Checked in: $shiftTitle (${assignment.id}) is in progress."
         }
 
-        assignments.filter { it.status == "completed_pending_rating" || it.status == "completed_rated" }.forEach { assignment ->
+        assignments.filter { it.productStatus == "checked_out" || it.productStatus == "completed" || it.productStatus == "paid" }.forEach { assignment ->
             val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
             events += "Checked out: $shiftTitle (${assignment.id}) completed."
         }
@@ -275,7 +298,7 @@ class MainViewModel(
         }
 
         val soon = assignments.firstOrNull { assignment ->
-            if (assignment.status !in setOf("offered", "active")) return@firstOrNull false
+            if (assignment.productStatus !in setOf("offered", "active")) return@firstOrNull false
             val shift = shiftById[assignment.shiftId] ?: return@firstOrNull false
             val start = runCatching { Instant.parse(shift.startAt) }.getOrNull() ?: return@firstOrNull false
             val minutes = Duration.between(Instant.now(), start).toMinutes()

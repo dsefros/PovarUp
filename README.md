@@ -66,3 +66,57 @@ Use login endpoint `POST /api/auth/login` with seeded credentials:
 - admin.demo / adminpass
 
 Optional onboarding endpoint: `POST /api/auth/onboard` with invite code `WORKER-DEMO-2026` or `BUSINESS-DEMO-2026`.
+
+## Current MVP capabilities (P0)
+
+- **Auth hardening**
+  - Passwords are stored as salted `scrypt` hashes (no plaintext password storage).
+  - `POST /api/auth/login` validates hashed passwords and returns `expiresAt`.
+  - Sessions are expiry-checked on every authenticated route.
+  - `POST /api/auth/logout` invalidates bearer sessions.
+- **Worker flow (Android + API)**
+  - List shifts, inspect shift details, apply, view applications/assignments, accept offers, check in/out.
+  - View active shift, completed history, and payout statuses.
+  - UI includes loading/empty/error/retry states and disables invalid actions.
+- **Business flow**
+  - Android business surface supports create shifts, list owned shifts, inspect shift applications, issue offers, and release payout creation.
+- **Operator/Admin flow**
+  - Android admin/operator section supports viewing assignments/payouts/problem-case counts and progressing payout status.
+  - API endpoints: `GET /api/admin/assignments`, `GET /api/admin/payouts`, `POST /api/admin/payouts/{payoutId}/status`, `GET /api/admin/problem-cases`, `GET /api/violation-flags`.
+- **Communication honesty**
+  - Contact reveal relay endpoint is removed (`410`) and chat is the single supported MVP communication path.
+
+## Payout lifecycle
+
+- `created`: payout record exists after business release.
+- `pending`: operator has started manual payout processing.
+- `paid`: payout completed.
+- `failed`: payout failed and requires operator retry/handling.
+
+## Product-facing status model
+
+- Shift: `open`, `filled`, `closed`, `cancelled`
+- Application: `submitted`, `offered`, `rejected`, `withdrawn`
+- Assignment: `offered`, `active`, `checked_in`, `checked_out`, `completed`, `paid`, `cancelled`
+- Payout: `created`, `pending`, `paid`, `failed`
+
+## Run and test
+
+```bash
+cd backend
+npm ci
+npm test
+```
+
+Android unit tests:
+
+```bash
+cd android
+./gradlew test
+```
+
+## Remaining limitations
+
+- No external payment processor integration yet (manual payout lifecycle only).
+- Operator tooling is API-first (no dedicated admin web UI yet).
+- Session expiry is fixed-duration TTL; no refresh token flow in MVP.

@@ -45,3 +45,23 @@ test('duplicate rating from same role is rejected', () => {
     cleanup();
   }
 });
+
+test('invalid duplicate lifecycle actions are blocked', () => {
+  const { runtime, cleanup } = buildTestRuntime();
+  try {
+    const svc = runtime.service;
+    const repo = runtime.repo;
+    const app = svc.applyToShift('shift_1', 'worker_1');
+    const asn = svc.offerAssignment(app.id, 'biz_1');
+    svc.acceptAssignment(asn.id);
+    assert.throws(() => svc.acceptAssignment(asn.id), /cannot be accepted/);
+    const shift = repo.findShiftById('shift_1');
+    repo.updateShiftTimes(shift.id, new Date(Date.now() - 10 * 60000).toISOString(), new Date(Date.now() + 2 * 3600_000).toISOString());
+    svc.attendance(asn.id, 'check_in');
+    assert.throws(() => svc.attendance(asn.id, 'check_in'), /must be active to check in/);
+    svc.attendance(asn.id, 'check_out');
+    assert.throws(() => svc.attendance(asn.id, 'check_out'), /must be in progress to check out/);
+  } finally {
+    cleanup();
+  }
+});

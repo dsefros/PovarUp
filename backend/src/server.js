@@ -1,5 +1,6 @@
 const http = require('node:http');
 const path = require('node:path');
+const { hashPassword } = require('./domain/passwords');
 const { seed } = require('./domain/store');
 const { createMarketplaceRepository } = require('./repositories/marketplaceRepository');
 const { createSqlMarketplaceRepository } = require('./repositories/sqlMarketplaceRepository');
@@ -8,13 +9,27 @@ const { createMarketplaceService } = require('./services/marketplaceService');
 const { createApp } = require('./http/app');
 const { handleError } = require('./http/http');
 
+function backfillLegacyPasswords(repo) {
+  if (!repo.listAccounts || !repo.updateAccountPassword) return;
+  const accounts = repo.listAccounts();
+  for (const account of accounts) {
+    const value = account.password || account.password_hash;
+    if (!value || String(value).startsWith('scrypt$')) continue;
+    repo.updateAccountPassword(account.user_id, hashPassword(String(value)));
+  }
+}
+
 function createSqlSeed(database) {
+  const workerHash = hashPassword('workerpass');
+  const businessHash = hashPassword('businesspass');
+  const adminHash = hashPassword('adminpass');
+  const workerTwoHash = hashPassword('worker2pass');
   return () => {
     database.exec(`
-      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_worker_1', 'worker.demo', 'workerpass', 'worker', 'Alex Cook');
-      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_biz_1', 'business.demo', 'businesspass', 'business', 'Kitchen Hub Manager');
-      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_admin_1', 'admin.demo', 'adminpass', 'admin', 'Platform Admin');
-      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_worker_2', 'worker2.demo', 'worker2pass', 'worker', 'Sam Prep');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_worker_1', 'worker.demo', '${workerHash}', 'worker', 'Alex Cook');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_biz_1', 'business.demo', '${businessHash}', 'business', 'Kitchen Hub Manager');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_admin_1', 'admin.demo', '${adminHash}', 'admin', 'Platform Admin');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_worker_2', 'worker2.demo', '${workerTwoHash}', 'worker', 'Sam Prep');
       INSERT OR IGNORE INTO onboarding_invites (code, role, business_name, location_name, location_address) VALUES ('WORKER-DEMO-2026', 'worker', null, null, null);
       INSERT OR IGNORE INTO onboarding_invites (code, role, business_name, location_name, location_address) VALUES ('BUSINESS-DEMO-2026', 'business', 'New Business', 'Primary Kitchen', 'TBD');
       INSERT OR IGNORE INTO worker_profiles (id, user_id, name, rating_avg) VALUES ('worker_1', 'worker.demo', 'Alex Cook', 4.8);
@@ -33,6 +48,7 @@ function resolveRuntime(overrides = {}) {
   if (persistence === 'memory') {
     seed();
     const repo = createMarketplaceRepository();
+    backfillLegacyPasswords(repo);
     return { repo, seed, service: createMarketplaceService(repo), persistence: 'memory' };
   }
 
@@ -41,6 +57,7 @@ function resolveRuntime(overrides = {}) {
   const repo = createSqlMarketplaceRepository(database);
   const sqlSeed = createSqlSeed(database);
   sqlSeed();
+  backfillLegacyPasswords(repo);
   return { repo, seed: sqlSeed, service: createMarketplaceService(repo), persistence: 'sql', database };
 }
 
