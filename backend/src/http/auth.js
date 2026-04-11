@@ -1,5 +1,8 @@
 const { error } = require('../domain/errors');
 const { requireString } = require('../domain/validation');
+const { hashPassword, verifyPassword } = require('../domain/passwords');
+
+const SESSION_TTL_MS = Number(process.env.POVARUP_SESSION_TTL_MS || 12 * 60 * 60 * 1000);
 
 function parseBearerToken(req) {
   const auth = req.headers.authorization || '';
@@ -11,6 +14,10 @@ function requireAuth(req, repo) {
   const token = parseBearerToken(req);
   const session = repo.findSessionByToken(token);
   if (!session) throw error('unauthorized', 'Session not found', { status: 401 });
+  if (session.expires_at && Date.parse(session.expires_at) <= Date.now()) {
+    repo.deleteSessionByToken(token);
+    throw error('session_expired', 'Session expired', { status: 401 });
+  }
   req.auth = session;
   return session;
 }
@@ -19,14 +26,20 @@ function createLoginSession(repo, idGenerator, body) {
   const userId = requireString(body.userId, 'userId');
   const password = requireString(body.password, 'password');
   const account = repo.findAccountByUserId(userId);
-  if (!account || account.password !== password) {
+  const passwordHash = account?.password_hash || account?.password;
+  if (!account || !passwordHash || !verifyPassword(password, passwordHash)) {
     throw error('invalid_credentials', 'Invalid user id or password', { status: 401 });
   }
 
   const token = idGenerator('sess');
-  const session = { token, user_id: account.user_id, role: account.role };
+  const session = {
+    token,
+    user_id: account.user_id,
+    role: account.role,
+    expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString()
+  };
   repo.insertSession(session);
-  return { token, userId: account.user_id, role: account.role, displayName: account.display_name };
+  return { token, userId: account.user_id, role: account.role, displayName: account.display_name, expiresAt: session.expires_at };
 }
 
 function onboardAccount(repo, idGenerator, nowIso, body) {
@@ -39,10 +52,11 @@ function onboardAccount(repo, idGenerator, nowIso, body) {
   if (repo.findAccountByUserId(userId)) throw error('user_exists', 'User already exists', { status: 409 });
 
   return repo.withTransaction(() => {
+    const passwordHash = hashPassword(password);
     const account = {
       id: idGenerator('acct'),
       user_id: userId,
-      password,
+      password_hash: passwordHash,
       role: invite.role,
       display_name: displayName,
       created_at: nowIso()
@@ -75,4 +89,10 @@ function onboardAccount(repo, idGenerator, nowIso, body) {
   });
 }
 
-module.exports = { requireAuth, createLoginSession, onboardAccount };
+function logoutSession(req, repo) {
+  const token = parseBearerToken(req);
+  repo.deleteSessionByToken(token);
+  return { ok: true };
+}
+
+module.exports = { requireAuth, createLoginSession, onboardAccount, logoutSession, SESSION_TTL_MS };

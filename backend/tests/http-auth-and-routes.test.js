@@ -36,7 +36,7 @@ test('unauthorized mutation is rejected', async () => {
   });
 });
 
-test('authorized worker can mutate and dto keys are camelCase', async () => {
+test('authorized worker gets duplicate apply protection and dto keys are camelCase', async () => {
   await withServer(async (base) => {
     const sess = await createSession(base, 'worker.demo', 'workerpass');
     const res = await fetch(`${base}/api/applications`, {
@@ -44,10 +44,14 @@ test('authorized worker can mutate and dto keys are camelCase', async () => {
       headers: { 'content-type': 'application/json', authorization: `Bearer ${sess.token}` },
       body: JSON.stringify({ shiftId: 'shift_1' })
     });
-    assert.equal(res.status, 201);
-    const body = await res.json();
-    assert.equal(typeof body.item.shiftId, 'string');
-    assert.equal(body.item.shift_id, undefined);
+    assert.equal(res.status, 409);
+
+    const assignments = await fetch(`${base}/api/assignments`, {
+      headers: { authorization: `Bearer ${sess.token}` }
+    });
+    const body = await assignments.json();
+    assert.equal(typeof body.items[0].shiftId, 'string');
+    assert.equal(body.items[0].shift_id, undefined);
   });
 });
 
@@ -182,7 +186,7 @@ test('sensitive reads enforce authorization', async () => {
     const ownerContacts = await fetch(`${base}/api/contacts/reveal/${assignmentId}`, {
       headers: { authorization: `Bearer ${worker.token}` }
     });
-    assert.equal(ownerContacts.status, 200);
+    assert.equal(ownerContacts.status, 410);
 
     const noAuthBalance = await fetch(`${base}/api/escrow/balance/biz_1`);
     assert.equal(noAuthBalance.status, 401);

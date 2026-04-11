@@ -20,6 +20,7 @@ interface MarketplaceRepository {
     fun baseUrl(): String
     fun currentSession(): SessionToken?
     fun login(userId: String, password: String): Result<SessionToken>
+    fun logout(): Result<Unit>
     fun clearSession()
     fun listShifts(): Result<List<Shift>>
     fun getShift(shiftId: String): Result<Shift>
@@ -36,6 +37,10 @@ interface MarketplaceRepository {
     fun offerAssignment(applicationId: String): Result<Assignment>
     fun releasePayout(assignmentId: String): Result<Payout>
     fun listMyPayouts(): Result<List<Payout>>
+    fun listAdminAssignments(): Result<List<Assignment>>
+    fun listAdminPayouts(): Result<List<Payout>>
+    fun updateAdminPayoutStatus(payoutId: String, status: String, note: String? = null): Result<Payout>
+    fun getAdminProblemCases(): Result<ProblemCasesDto>
 }
 
 interface MarketplaceApi {
@@ -110,6 +115,10 @@ class ApiMarketplaceRepository(
         return response.map { it.toDomain().also { session -> sessionStore.save(session); setRole(session.role) } }
     }
 
+    override fun logout(): Result<Unit> =
+        api.post<Map<String, Any>>(baseUrl(), "/auth/logout", token(), null, object : TypeToken<Map<String, Any>>() {}.type)
+            .map { sessionStore.clear() }
+
     override fun clearSession() { sessionStore.clear() }
 
     override fun listShifts(): Result<List<Shift>> =
@@ -169,4 +178,20 @@ class ApiMarketplaceRepository(
     override fun listMyPayouts(): Result<List<Payout>> =
         api.get<ApiListEnvelope<PayoutDto>>(baseUrl(), "/me/payouts", token(), object : TypeToken<ApiListEnvelope<PayoutDto>>() {}.type)
             .map { it.items.map { dto -> dto.toDomain() } }
+
+    override fun listAdminAssignments(): Result<List<Assignment>> =
+        api.get<ApiListEnvelope<AssignmentDto>>(baseUrl(), "/admin/assignments", token(), object : TypeToken<ApiListEnvelope<AssignmentDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
+
+    override fun listAdminPayouts(): Result<List<Payout>> =
+        api.get<ApiListEnvelope<PayoutDto>>(baseUrl(), "/admin/payouts", token(), object : TypeToken<ApiListEnvelope<PayoutDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
+
+    override fun updateAdminPayoutStatus(payoutId: String, status: String, note: String?): Result<Payout> =
+        api.post<ApiItemEnvelope<PayoutDto>>(baseUrl(), "/admin/payouts/$payoutId/status", token(), UpdatePayoutStatusRequest(status, note), object : TypeToken<ApiItemEnvelope<PayoutDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing payout") }
+
+    override fun getAdminProblemCases(): Result<ProblemCasesDto> =
+        api.get<ApiItemEnvelope<ProblemCasesDto>>(baseUrl(), "/admin/problem-cases", token(), object : TypeToken<ApiItemEnvelope<ProblemCasesDto>>() {}.type)
+            .map { it.item ?: ProblemCasesDto() }
 }

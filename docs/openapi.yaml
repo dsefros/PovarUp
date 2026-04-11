@@ -41,6 +41,8 @@ components:
         endAt: { type: string, format: date-time }
         payRateCents: { type: integer }
         status: { type: string }
+        normalizedStatus: { type: string, enum: [open, filled, closed, cancelled] }
+        productStatus: { type: string, enum: [open, filled, closed, cancelled] }
     Application:
       type: object
       properties:
@@ -48,6 +50,8 @@ components:
         shiftId: { type: string }
         workerId: { type: string }
         status: { type: string }
+        normalizedStatus: { type: string, enum: [submitted, offered, rejected, withdrawn] }
+        productStatus: { type: string, enum: [submitted, offered, rejected, withdrawn] }
     Assignment:
       type: object
       properties:
@@ -56,7 +60,21 @@ components:
         workerId: { type: string }
         businessId: { type: string }
         status: { type: string }
+        normalizedStatus: { type: string, enum: [offered, active, checked_in, checked_out, completed, paid, cancelled] }
+        productStatus: { type: string, enum: [offered, active, checked_in, checked_out, completed, paid, cancelled] }
         escrowLockedCents: { type: integer }
+    Payout:
+      type: object
+      properties:
+        id: { type: string }
+        assignmentId: { type: string }
+        workerId: { type: string }
+        amountCents: { type: integer }
+        status: { type: string, enum: [created, pending, paid, failed] }
+        internalStatus: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
     Message:
       type: object
       properties:
@@ -102,6 +120,10 @@ paths:
               required: [inviteCode, userId, password, displayName]
               properties: { inviteCode: { type: string }, userId: { type: string }, password: { type: string }, displayName: { type: string } }
       responses: { '201': { description: account created } }
+  /auth/logout:
+    post:
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: session revoked } }
   /workers:
     get: { responses: { '200': { description: list workers } } }
   /businesses:
@@ -192,7 +214,7 @@ paths:
       parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
       security: [{ BearerAuth: [] }]
       responses:
-        '200': { description: masked contact relay }
+        '410': { description: removed; use in-platform chat }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /escrow/fund:
@@ -222,3 +244,20 @@ paths:
       responses: { '200': { description: payouts } }
   /violation-flags:
     get: { responses: { '200': { description: list flags } } }
+  /admin/assignments:
+    get:
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: admin assignment operations view } }
+  /admin/payouts:
+    get:
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: admin payout operations view } }
+  /admin/payouts/{payoutId}/status:
+    post:
+      parameters: [{ name: payoutId, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: update manual payout status } }
+  /admin/problem-cases:
+    get:
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: flags + failed payouts + stalled assignments } }

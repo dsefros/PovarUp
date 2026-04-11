@@ -1,5 +1,5 @@
 const { id, nowIso } = require('../domain/store');
-const { detectViolation, maskedContact } = require('./antiBypassService');
+const { detectViolation } = require('./antiBypassService');
 const { createMarketplaceRepository } = require('../repositories/marketplaceRepository');
 const { error } = require('../domain/errors');
 const { requireNumber, requireOneOf, requireString } = require('../domain/validation');
@@ -40,9 +40,20 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     if (!shift) throw error('shift_not_found', 'shift not found', { status: 404 });
     if (shift.status !== 'open') throw error('shift_not_open', 'shift is not open', { status: 409 });
     if (!repo.findWorkerById(workerId)) throw error('worker_not_found', 'worker not found', { status: 404 });
+    const existingApplication = repo.listApplications().find((item) => item.shift_id === shiftId && item.worker_id === workerId);
+    if (existingApplication) throw error('duplicate_application', 'worker already applied to this shift', { status: 409 });
+    const existingAssignment = repo.listAssignments().find((item) => item.shift_id === shiftId && item.worker_id === workerId);
+    if (existingAssignment) throw error('duplicate_assignment', 'worker is already assigned to this shift', { status: 409 });
 
     const application = { id: id('app'), shift_id: shiftId, worker_id: workerId, status: 'applied', created_at: nowIso() };
-    repo.insertApplication(application);
+    try {
+      repo.insertApplication(application);
+    } catch (err) {
+      if (String(err.message || '').includes('idx_applications_shift_worker_unique')) {
+        throw error('duplicate_application', 'worker already applied to this shift', { status: 409 });
+      }
+      throw err;
+    }
     return application;
   }
 
@@ -66,7 +77,14 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
         id: id('asn'), shift_id: shift.id, application_id: application.id, worker_id: application.worker_id, business_id: businessId,
         status: 'offered', escrow_locked_cents: required, contact_reveal_stage: 'accepted', created_at: nowIso()
       };
-      repo.insertAssignment(assignment);
+      try {
+        repo.insertAssignment(assignment);
+      } catch (err) {
+        if (String(err.message || '').includes('idx_assignments_application_unique')) {
+          throw error('duplicate_offer', 'assignment already offered for this application', { status: 409 });
+        }
+        throw err;
+      }
       if (!repo.findChatByAssignmentId(assignment.id)) {
         repo.insertChat({ id: id('chat'), assignment_id: assignment.id, worker_id: assignment.worker_id, business_id: businessId, created_at: nowIso() });
       }
@@ -97,7 +115,7 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
       repo.updateAssignmentState(assignment.id, 'in_progress');
     }
     if (type === 'check_out') {
-      if (!['in_progress', 'completed_pending_rating'].includes(assignment.status)) throw error('invalid_assignment_state', 'assignment must be in progress to check out', { status: 409 });
+      if (assignment.status !== 'in_progress') throw error('invalid_assignment_state', 'assignment must be in progress to check out', { status: 409 });
       const hasIn = repo.hasAttendanceCheckIn(assignmentId);
       if (!hasIn) throw error('checkin_required', 'check-in required before check-out', { status: 409 });
       repo.updateAssignmentState(assignment.id, 'completed_pending_rating');
@@ -145,11 +163,9 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
   }
 
   function revealContacts(assignmentId, stage = 'accepted') {
-    const assignment = repo.findAssignmentById(requireString(assignmentId, 'assignmentId'));
-    if (!assignment) throw error('assignment_not_found', 'assignment not found', { status: 404 });
-    if (stage === 'check_in' && assignment.status !== 'in_progress') throw error('contact_reveal_not_allowed', 'contact reveal not allowed', { status: 409 });
-    if (stage === 'accepted' && !['active', 'in_progress', 'completed_pending_rating', 'completed_rated'].includes(assignment.status)) throw error('contact_reveal_not_allowed', 'contact reveal not allowed', { status: 409 });
-    return { worker_contact: maskedContact('worker@example.com', assignmentId), business_contact: maskedContact('biz@example.com', assignmentId) };
+    requireString(assignmentId, 'assignmentId');
+    requireString(stage, 'stage');
+    throw error('contact_reveal_removed', 'Use in-platform chat for participant communication', { status: 410 });
   }
 
   function fundEscrow(businessId, amount) {
@@ -190,8 +206,32 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     });
   }
 
+  function updatePayoutStatus(payoutId, nextStatus, note = null) {
+    requireString(payoutId, 'payoutId');
+    requireOneOf(nextStatus, 'status', ['created', 'pending', 'paid', 'failed']);
+    const payout = repo.findPayoutById(payoutId);
+    if (!payout) throw error('payout_not_found', 'payout not found', { status: 404 });
+    const allowed = {
+      created: ['pending', 'failed'],
+      pending: ['paid', 'failed'],
+      paid: [],
+      failed: ['pending']
+    };
+    if (!allowed[payout.status]?.includes(nextStatus)) {
+      throw error('invalid_payout_state', 'invalid payout status transition', { status: 409 });
+    }
+    repo.updatePayoutStatus(payoutId, nextStatus, nowIso(), note);
+    return repo.findPayoutById(payoutId);
+  }
 
-  return { createShift, applyToShift, offerAssignment, acceptAssignment, attendance, addRating, getChatByAssignment, sendMessage, revealContacts, fundEscrow, releasePayment };
+  function listProblemCases() {
+    const flags = repo.listViolationFlags();
+    const failedPayouts = repo.listPayouts().filter((p) => p.status === 'failed');
+    const stalledAssignments = repo.listAssignments().filter((a) => a.status === 'completed_pending_rating');
+    return { flags, failedPayouts, stalledAssignments };
+  }
+
+  return { createShift, applyToShift, offerAssignment, acceptAssignment, attendance, addRating, getChatByAssignment, sendMessage, revealContacts, fundEscrow, releasePayment, updatePayoutStatus, listProblemCases };
 }
 
 module.exports = { createMarketplaceService };

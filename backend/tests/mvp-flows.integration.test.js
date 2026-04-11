@@ -107,6 +107,7 @@ test('worker and business end-to-end MVP flow', async () => {
     const assignmentDetail = await assignmentDetailRes.json();
     assert.equal(assignmentDetailRes.status, 200);
     assert.equal(assignmentDetail.item.status, 'completed_pending_rating');
+    assert.equal(assignmentDetail.item.productStatus, 'checked_out');
 
     const payoutRes = await fetch(`${base}/api/escrow/release/${assignment.id}`, {
       method: 'POST',
@@ -114,5 +115,7 @@ test('worker and business end-to-end MVP flow', async () => {
       body: JSON.stringify({ force: false })
     });
     assert.equal(payoutRes.status, 201);
+    const payout = await payoutRes.json();
+    assert.equal(payout.item.status, 'created');
   });
 });

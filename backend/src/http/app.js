@@ -1,7 +1,7 @@
 const { URL } = require('node:url');
 const { id, nowIso } = require('../domain/store');
 const { send, parseBody } = require('./http');
-const { requireAuth, createLoginSession, onboardAccount } = require('./auth');
+const { requireAuth, createLoginSession, onboardAccount, logoutSession } = require('./auth');
 const { assignmentDto, applicationDto, messageDto, payoutDto, shiftDto } = require('../dto/mappers');
 const { error } = require('../domain/errors');
 
@@ -19,6 +19,13 @@ function canAccessAssignment(actor, assignment) {
   return false;
 }
 
+function payoutIndex(repo) {
+  if (!repo.listPayouts) return {};
+  return repo.listPayouts().reduce((acc, payout) => {
+    acc[payout.assignment_id] = payout;
+    return acc;
+  }, {});
+}
 
 function canAccessApplication(actor, application, repo) {
   if (!application) return false;
@@ -41,31 +48,32 @@ function createApp({ repo, seed, service }) {
     if (path === '/api/seed' && method === 'POST') { seed(); return send(res, 200, { seeded: true }); }
     if (path === '/api/auth/session' && method === 'POST') return send(res, 410, { error: { code: 'deprecated_auth', message: 'Use /api/auth/login', details: null } });
     if (path === '/api/auth/login' && method === 'POST') return send(res, 200, createLoginSession(repo, id, await parseBody(req)));
+    if (path === '/api/auth/logout' && method === 'POST') return send(res, 200, logoutSession(req, repo));
     if (path === '/api/auth/onboard' && method === 'POST') return send(res, 201, { item: onboardAccount(repo, id, nowIso, await parseBody(req)) });
 
     if (path === '/api/workers' && method === 'GET') return send(res, 200, { items: repo.listWorkers() });
     if (path === '/api/businesses' && method === 'GET') return send(res, 200, { items: repo.listBusinesses() });
-    if (path === '/api/shifts' && method === 'GET') return send(res, 200, { items: repo.listShifts().map(shiftDto) });
+    if (path === '/api/shifts' && method === 'GET') return send(res, 200, { items: repo.listShifts().map((s) => shiftDto(s, repo.listAssignments())) });
 
     if (path === '/api/shifts' && method === 'POST') {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'business' || !actor.business) throw error('forbidden', 'Only business users can create shifts', { status: 403 });
       const b = await parseBody(req);
       const item = service.createShift({ ...b, businessId: actor.business.id });
-      return send(res, 201, { item: shiftDto(item) });
+      return send(res, 201, { item: shiftDto(item, repo.listAssignments()) });
     }
 
     if (path.match(/^\/api\/shifts\/[^/]+$/) && method === 'GET') {
       const shiftId = path.split('/')[3];
       const item = repo.findShiftById(shiftId);
       if (!item) throw error('shift_not_found', 'shift not found', { status: 404 });
-      return send(res, 200, { item: shiftDto(item) });
+      return send(res, 200, { item: shiftDto(item, repo.listAssignments()) });
     }
 
     if (path === '/api/business/shifts' && method === 'GET') {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'business' || !actor.business) throw error('forbidden', 'Only business users can view owned shifts', { status: 403 });
-      const items = repo.listShifts().filter((shift) => shift.business_id === actor.business.id).map(shiftDto);
+      const items = repo.listShifts().filter((shift) => shift.business_id === actor.business.id).map((s) => shiftDto(s, repo.listAssignments()));
       return send(res, 200, { items });
     }
 
@@ -95,7 +103,7 @@ function createApp({ repo, seed, service }) {
 
     if (path === '/api/assignments' && method === 'GET') {
       const actor = actorFromSession(requireAuth(req, repo), repo);
-      const items = repo.listAssignments().filter((a) => canAccessAssignment(actor, a)).map(assignmentDto);
+      const items = repo.listAssignments().filter((a) => canAccessAssignment(actor, a)).map((a) => assignmentDto(a, payoutIndex(repo)));
       return send(res, 200, { items });
     }
 
@@ -105,14 +113,14 @@ function createApp({ repo, seed, service }) {
       const item = repo.findAssignmentById(assignmentId);
       if (!item) throw error('assignment_not_found', 'assignment not found', { status: 404 });
       if (!canAccessAssignment(actor, item)) throw error('forbidden', 'Assignment access denied', { status: 403 });
-      return send(res, 200, { item: assignmentDto(item) });
+      return send(res, 200, { item: assignmentDto(item, payoutIndex(repo)) });
     }
 
     if (path === '/api/assignments/offer' && method === 'POST') {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'business' || !actor.business) throw error('forbidden', 'Only businesses can offer', { status: 403 });
       const b = await parseBody(req);
-      return send(res, 201, { item: assignmentDto(service.offerAssignment(b.applicationId, actor.business.id)) });
+      return send(res, 201, { item: assignmentDto(service.offerAssignment(b.applicationId, actor.business.id), payoutIndex(repo)) });
     }
 
     if (path.match(/^\/api\/assignments\/[^/]+\/accept$/) && method === 'POST') {
@@ -122,7 +130,7 @@ function createApp({ repo, seed, service }) {
       if (actor.session.role !== 'worker' || !actor.worker || !assignment || assignment.worker_id !== actor.worker.id) {
         throw error('forbidden', 'Only assigned worker can accept', { status: 403 });
       }
-      return send(res, 200, { item: assignmentDto(service.acceptAssignment(aid)) });
+      return send(res, 200, { item: assignmentDto(service.acceptAssignment(aid), payoutIndex(repo)) });
     }
 
     if (path === '/api/attendance/check-in' && method === 'POST') {
@@ -236,6 +244,39 @@ function createApp({ repo, seed, service }) {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       if (actor.session.role !== 'admin') throw error('forbidden', 'Only admin can view violation flags', { status: 403 });
       return send(res, 200, { items: repo.listViolationFlags() });
+    }
+
+    if (path === '/api/admin/assignments' && method === 'GET') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      if (actor.session.role !== 'admin') throw error('forbidden', 'Only admin can view assignments', { status: 403 });
+      return send(res, 200, { items: repo.listAssignments().map((a) => assignmentDto(a, payoutIndex(repo))) });
+    }
+
+    if (path === '/api/admin/payouts' && method === 'GET') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      if (actor.session.role !== 'admin') throw error('forbidden', 'Only admin can view payouts', { status: 403 });
+      return send(res, 200, { items: repo.listPayouts().map(payoutDto) });
+    }
+
+    if (path.match(/^\/api\/admin\/payouts\/[^/]+\/status$/) && method === 'POST') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      if (actor.session.role !== 'admin') throw error('forbidden', 'Only admin can update payout status', { status: 403 });
+      const payoutId = path.split('/')[4];
+      const b = await parseBody(req);
+      return send(res, 200, { item: payoutDto(service.updatePayoutStatus(payoutId, b.status, b.note || null)) });
+    }
+
+    if (path === '/api/admin/problem-cases' && method === 'GET') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      if (actor.session.role !== 'admin') throw error('forbidden', 'Only admin can view problem cases', { status: 403 });
+      const result = service.listProblemCases();
+      return send(res, 200, {
+        item: {
+          flags: result.flags,
+          failedPayouts: result.failedPayouts.map(payoutDto),
+          stalledAssignments: result.stalledAssignments.map((a) => assignmentDto(a, payoutIndex(repo)))
+        }
+      });
     }
 
     return send(res, 404, { error: { code: 'not_found', message: 'not found', details: null } });

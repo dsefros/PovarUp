@@ -24,9 +24,11 @@ function createSqlMarketplaceRepository(db) {
     listAssignments: db.prepare('SELECT * FROM assignments ORDER BY created_at, id'),
     listMessagesByChatId: db.prepare('SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at, id'),
     listPayoutsByWorkerId: db.prepare('SELECT * FROM payouts WHERE worker_id = ? ORDER BY created_at, id'),
+    listPayouts: db.prepare('SELECT * FROM payouts ORDER BY created_at, id'),
     listViolationFlags: db.prepare('SELECT * FROM violation_flags ORDER BY created_at, id'),
+    listAccounts: db.prepare('SELECT * FROM accounts ORDER BY created_at, id'),
 
-    findSessionByToken: db.prepare('SELECT token, user_id, role, created_at FROM sessions WHERE token = ?'),
+    findSessionByToken: db.prepare('SELECT token, user_id, role, created_at, expires_at FROM sessions WHERE token = ?'),
     findAccountByUserId: db.prepare('SELECT * FROM accounts WHERE user_id = ?'),
     findInviteByCode: db.prepare('SELECT * FROM onboarding_invites WHERE code = ?'),
     findWorkerById: db.prepare('SELECT * FROM worker_profiles WHERE id = ?'),
@@ -40,11 +42,13 @@ function createSqlMarketplaceRepository(db) {
     findChatByAssignmentId: db.prepare('SELECT * FROM chats WHERE assignment_id = ?'),
     findEscrowByBusinessId: db.prepare('SELECT * FROM escrow_accounts WHERE business_id = ?'),
     findPayoutByAssignmentId: db.prepare('SELECT * FROM payouts WHERE assignment_id = ? ORDER BY created_at, id LIMIT 1'),
+    findPayoutById: db.prepare('SELECT * FROM payouts WHERE id = ?'),
     hasAttendanceCheckIn: db.prepare("SELECT 1 AS hit FROM attendance_events WHERE assignment_id = ? AND type = 'check_in' LIMIT 1"),
     listRatingsByAssignmentId: db.prepare('SELECT * FROM ratings WHERE assignment_id = ? ORDER BY created_at, id'),
     hasRatingByRole: db.prepare('SELECT 1 AS hit FROM ratings WHERE assignment_id = ? AND from_role = ? LIMIT 1'),
 
-    insertSession: db.prepare('INSERT INTO sessions (token, user_id, role) VALUES (?, ?, ?)'),
+    insertSession: db.prepare('INSERT INTO sessions (token, user_id, role, expires_at) VALUES (?, ?, ?, ?)'),
+    deleteSessionByToken: db.prepare('DELETE FROM sessions WHERE token = ?'),
     insertAccount: db.prepare('INSERT INTO accounts (id, user_id, password, role, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
     insertWorkerProfile: db.prepare('INSERT INTO worker_profiles (id, user_id, name, rating_avg, created_at) VALUES (?, ?, ?, ?, ?)'),
     insertBusiness: db.prepare('INSERT INTO businesses (id, user_id, name, created_at) VALUES (?, ?, ?, ?)'),
@@ -64,7 +68,9 @@ function createSqlMarketplaceRepository(db) {
     updateEscrowBalance: db.prepare('UPDATE escrow_accounts SET balance_cents = ? WHERE id = ?'),
     updateApplicationStatus: db.prepare('UPDATE applications SET status = ? WHERE id = ?'),
     updateAssignmentState: db.prepare('UPDATE assignments SET status = ?, accepted_at = COALESCE(?, accepted_at) WHERE id = ?'),
-    updateShiftTimes: db.prepare('UPDATE shifts SET start_at = ?, end_at = ? WHERE id = ?')
+    updateShiftTimes: db.prepare('UPDATE shifts SET start_at = ?, end_at = ? WHERE id = ?'),
+    updatePayoutStatus: db.prepare('UPDATE payouts SET status = ?, updated_at = ?, note = ? WHERE id = ?'),
+    updateAccountPassword: db.prepare('UPDATE accounts SET password = ? WHERE user_id = ?')
   };
 
   let txDepth = 0;
@@ -93,13 +99,16 @@ function createSqlMarketplaceRepository(db) {
     listAssignments: () => list(q.listAssignments),
     listMessagesByChatId: (chatId) => list(q.listMessagesByChatId, [chatId]),
     listPayoutsByWorkerId: (workerId) => list(q.listPayoutsByWorkerId, [workerId]),
+    listPayouts: () => list(q.listPayouts),
     listViolationFlags: () => list(q.listViolationFlags),
+    listAccounts: () => list(q.listAccounts),
 
     findSessionByToken: (token) => one(q.findSessionByToken, [token]),
     findAccountByUserId: (userId) => one(q.findAccountByUserId, [userId]),
     findInviteByCode: (code) => one(q.findInviteByCode, [code]),
-    insertSession: (session) => q.insertSession.run(session.token, session.user_id, session.role),
-    insertAccount: (account) => q.insertAccount.run(account.id, account.user_id, account.password, account.role, account.display_name, account.created_at),
+    insertSession: (session) => q.insertSession.run(session.token, session.user_id, session.role, session.expires_at),
+    deleteSessionByToken: (token) => q.deleteSessionByToken.run(token),
+    insertAccount: (account) => q.insertAccount.run(account.id, account.user_id, account.password_hash || account.password, account.role, account.display_name, account.created_at),
     insertWorkerProfile: (worker) => q.insertWorkerProfile.run(worker.id, worker.user_id, worker.name, worker.rating_avg ?? null, worker.created_at),
     insertBusiness: (business) => q.insertBusiness.run(business.id, business.user_id, business.name, business.created_at),
     insertLocation: (location) => q.insertLocation.run(location.id, location.business_id, location.name, location.address, location.created_at),
@@ -114,6 +123,7 @@ function createSqlMarketplaceRepository(db) {
     findChatByAssignmentId: (assignmentId) => one(q.findChatByAssignmentId, [assignmentId]),
     findEscrowByBusinessId: (businessId) => one(q.findEscrowByBusinessId, [businessId]),
     findPayoutByAssignmentId: (assignmentId) => one(q.findPayoutByAssignmentId, [assignmentId]),
+    findPayoutById: (payoutId) => one(q.findPayoutById, [payoutId]),
     hasAttendanceCheckIn: (assignmentId) => Boolean(one(q.hasAttendanceCheckIn, [assignmentId])),
     listRatingsByAssignmentId: (assignmentId) => list(q.listRatingsByAssignmentId, [assignmentId]),
     hasRatingByRole: (assignmentId, role) => Boolean(one(q.hasRatingByRole, [assignmentId, role])),
@@ -133,7 +143,9 @@ function createSqlMarketplaceRepository(db) {
     updateEscrowBalance: (accountId, balanceCents) => q.updateEscrowBalance.run(balanceCents, accountId),
     updateApplicationStatus: (applicationId, status) => q.updateApplicationStatus.run(status, applicationId),
     updateAssignmentState: (assignmentId, status, acceptedAt = null) => q.updateAssignmentState.run(status, acceptedAt, assignmentId),
-    updateShiftTimes: (shiftId, startAt, endAt) => q.updateShiftTimes.run(startAt, endAt, shiftId)
+    updateShiftTimes: (shiftId, startAt, endAt) => q.updateShiftTimes.run(startAt, endAt, shiftId),
+    updatePayoutStatus: (payoutId, status, updatedAt, note = null) => q.updatePayoutStatus.run(status, updatedAt, note, payoutId),
+    updateAccountPassword: (userId, password) => q.updateAccountPassword.run(password, userId)
   };
 }
 
