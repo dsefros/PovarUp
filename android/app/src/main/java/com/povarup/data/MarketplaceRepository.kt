@@ -35,6 +35,7 @@ interface MarketplaceRepository {
     fun listShiftApplications(shiftId: String): Result<List<Application>>
     fun offerAssignment(applicationId: String): Result<Assignment>
     fun releasePayout(assignmentId: String): Result<Payout>
+    fun listMyPayouts(): Result<List<Payout>>
 }
 
 interface MarketplaceApi {
@@ -164,4 +165,8 @@ class ApiMarketplaceRepository(
     override fun releasePayout(assignmentId: String): Result<Payout> =
         api.post<ApiItemEnvelope<PayoutDto>>(baseUrl(), "/escrow/release/$assignmentId", token(), ReleasePayoutRequest(false), object : TypeToken<ApiItemEnvelope<PayoutDto>>() {}.type)
             .map { it.item?.toDomain() ?: throw IllegalStateException("Missing payout") }
+
+    override fun listMyPayouts(): Result<List<Payout>> =
+        api.get<ApiListEnvelope<PayoutDto>>(baseUrl(), "/me/payouts", token(), object : TypeToken<ApiListEnvelope<PayoutDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
 }
