@@ -1,7 +1,12 @@
 package com.povarup.data
 
-data class ApiEnvelope<T>(
-    val data: T? = null,
+data class ApiListEnvelope<T>(
+    val items: List<T> = emptyList(),
+    val error: ApiError? = null
+)
+
+data class ApiItemEnvelope<T>(
+    val item: T? = null,
     val error: ApiError? = null
 )
 
@@ -19,6 +24,5 @@ data class ShiftDto(
     val startAt: String,
     val endAt: String,
     val payRateCents: Int,
-    val status: String,
-    val createdAt: String
+    val status: String
 )

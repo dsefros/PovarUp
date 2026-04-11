@@ -14,6 +14,9 @@ android {
     versionCode 1
     versionName '1.0'
 
+    def backendBaseUrl = project.findProperty('backendBaseUrl') ?: 'http://10.0.2.2:4000/api'
+    buildConfigField 'String', 'BACKEND_BASE_URL', "\"${backendBaseUrl}\""
+
     testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
   }
 
@@ -22,6 +25,10 @@ android {
       minifyEnabled false
       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
     }
+  }
+
+  buildFeatures {
+    buildConfig true
   }
 
   compileOptions {
@@ -37,5 +44,12 @@ dependencies {
   implementation 'androidx.core:core-ktx:1.13.1'
   implementation 'androidx.appcompat:appcompat:1.7.0'
   implementation 'com.google.android.material:material:1.12.0'
+  implementation 'androidx.activity:activity-ktx:1.9.1'
+  implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.3'
+  implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+  implementation 'com.google.code.gson:gson:2.11.0'
+
   testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1'
 }

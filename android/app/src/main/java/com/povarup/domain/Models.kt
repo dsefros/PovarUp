@@ -8,6 +8,5 @@ data class Shift(
     val startAt: String,
     val endAt: String,
     val payRateCents: Int,
-    val status: String,
-    val createdAt: String
+    val status: String
 )
