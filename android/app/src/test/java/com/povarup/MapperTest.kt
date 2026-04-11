@@ -29,21 +29,21 @@ class MapperTest {
 
     @Test
     fun mapSessionDtoToDomain() {
-        val dto = SessionDto(token = "sess_1", userId = "u_worker_1", role = "worker")
+        val dto = SessionDto(token = "sess_1", userId = "worker.demo", role = "worker")
 
         val model = dto.toDomain()
         assertEquals("sess_1", model.token)
-        assertEquals("u_worker_1", model.userId)
+        assertEquals("worker.demo", model.userId)
         assertEquals("worker", model.role)
     }
 
     @Test
     fun mapApplicationDtoToDomain() {
-        val dto = ApplicationDto(id = "app_1", shiftId = "shift_1", workerId = "worker_1", status = "pending")
+        val dto = ApplicationDto(id = "app_1", shiftId = "shift_1", workerId = "worker_1", status = "applied")
 
         val model = dto.toDomain()
         assertEquals("app_1", model.id)
         assertEquals("shift_1", model.shiftId)
-        assertEquals("pending", model.status)
+        assertEquals("applied", model.status)
     }
 }

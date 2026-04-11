@@ -17,3 +17,20 @@ data class Application(
     val workerId: String,
     val status: String
 )
+
+data class Assignment(
+    val id: String,
+    val shiftId: String,
+    val workerId: String,
+    val businessId: String,
+    val status: String,
+    val escrowLockedCents: Int
+)
+
+data class Payout(
+    val id: String,
+    val assignmentId: String,
+    val workerId: String,
+    val amountCents: Int,
+    val status: String
+)

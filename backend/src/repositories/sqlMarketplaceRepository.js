@@ -27,6 +27,8 @@ function createSqlMarketplaceRepository(db) {
     listViolationFlags: db.prepare('SELECT * FROM violation_flags ORDER BY created_at, id'),
 
     findSessionByToken: db.prepare('SELECT token, user_id, role, created_at FROM sessions WHERE token = ?'),
+    findAccountByUserId: db.prepare('SELECT * FROM accounts WHERE user_id = ?'),
+    findInviteByCode: db.prepare('SELECT * FROM onboarding_invites WHERE code = ?'),
     findWorkerById: db.prepare('SELECT * FROM worker_profiles WHERE id = ?'),
     findWorkerByUserId: db.prepare('SELECT * FROM worker_profiles WHERE user_id = ?'),
     findBusinessById: db.prepare('SELECT * FROM businesses WHERE id = ?'),
@@ -43,6 +45,10 @@ function createSqlMarketplaceRepository(db) {
     hasRatingByRole: db.prepare('SELECT 1 AS hit FROM ratings WHERE assignment_id = ? AND from_role = ? LIMIT 1'),
 
     insertSession: db.prepare('INSERT INTO sessions (token, user_id, role) VALUES (?, ?, ?)'),
+    insertAccount: db.prepare('INSERT INTO accounts (id, user_id, password, role, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
+    insertWorkerProfile: db.prepare('INSERT INTO worker_profiles (id, user_id, name, rating_avg, created_at) VALUES (?, ?, ?, ?, ?)'),
+    insertBusiness: db.prepare('INSERT INTO businesses (id, user_id, name, created_at) VALUES (?, ?, ?, ?)'),
+    insertLocation: db.prepare('INSERT INTO locations (id, business_id, name, address, created_at) VALUES (?, ?, ?, ?, ?)'),
     insertShift: db.prepare('INSERT INTO shifts (id, business_id, location_id, title, start_at, end_at, pay_rate_cents, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
     insertApplication: db.prepare('INSERT INTO applications (id, shift_id, worker_id, status, created_at) VALUES (?, ?, ?, ?, ?)'),
     insertAssignment: db.prepare('INSERT INTO assignments (id, shift_id, application_id, worker_id, business_id, status, escrow_locked_cents, contact_reveal_stage, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
@@ -90,7 +96,13 @@ function createSqlMarketplaceRepository(db) {
     listViolationFlags: () => list(q.listViolationFlags),
 
     findSessionByToken: (token) => one(q.findSessionByToken, [token]),
+    findAccountByUserId: (userId) => one(q.findAccountByUserId, [userId]),
+    findInviteByCode: (code) => one(q.findInviteByCode, [code]),
     insertSession: (session) => q.insertSession.run(session.token, session.user_id, session.role),
+    insertAccount: (account) => q.insertAccount.run(account.id, account.user_id, account.password, account.role, account.display_name, account.created_at),
+    insertWorkerProfile: (worker) => q.insertWorkerProfile.run(worker.id, worker.user_id, worker.name, worker.rating_avg ?? null, worker.created_at),
+    insertBusiness: (business) => q.insertBusiness.run(business.id, business.user_id, business.name, business.created_at),
+    insertLocation: (location) => q.insertLocation.run(location.id, location.business_id, location.name, location.address, location.created_at),
     findWorkerById: (id) => one(q.findWorkerById, [id]),
     findWorkerByUserId: (userId) => one(q.findWorkerByUserId, [userId]),
     findBusinessById: (id) => one(q.findBusinessById, [id]),

@@ -16,15 +16,16 @@ cd android
 ```
 
 ## Minimal session-aware flow
-The Android client now uses backend sessions via `POST /api/auth/session` with:
+The Android client now uses backend sessions via `POST /api/auth/login` with:
 
 ```json
-{"userId":"u_worker_1","role":"worker"}
+{"userId":"worker.demo","password":"workerpass"}
 ```
 
 For local seeded backend testing, practical defaults are:
-- worker: `u_worker_1`
-- business: `u_biz_1`
+- worker: `worker.demo` / `workerpass`
+- business: `business.demo` / `businesspass`
+- admin: `admin.demo` / `adminpass`
 
 The app stores `{token,userId,role}` in `SharedPreferences` (`povarup_session`) and automatically sends `Authorization: Bearer <token>` for API-backed shifts calls.
 

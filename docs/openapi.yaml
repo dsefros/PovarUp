@@ -78,14 +78,30 @@ paths:
       responses: { '200': { description: seeded } }
   /auth/session:
     post:
+      deprecated: true
+      responses: { '410': { description: deprecated auth flow } }
+  /auth/login:
+    post:
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              properties: { userId: { type: string }, role: { type: string } }
+              required: [userId, password]
+              properties: { userId: { type: string }, password: { type: string } }
       responses: { '200': { description: session } }
+  /auth/onboard:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inviteCode, userId, password, displayName]
+              properties: { inviteCode: { type: string }, userId: { type: string }, password: { type: string }, displayName: { type: string } }
+      responses: { '201': { description: account created } }
   /workers:
     get: { responses: { '200': { description: list workers } } }
   /businesses:
@@ -97,6 +113,20 @@ paths:
     post:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Shift' } } } }
       responses: { '201': { description: created } }
+
+  /shifts/{id}:
+    get:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: shift detail } }
+  /business/shifts:
+    get:
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: business owned shifts } }
+  /business/shifts/{shiftId}/applications:
+    get:
+      parameters: [{ name: shiftId, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: applications for owned shift } }
   /applications:
     get:
       description: |
@@ -123,6 +153,10 @@ paths:
       responses:
         '200': { description: list assignments }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /assignments/{id}:
+    get:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: assignment detail } }
   /assignments/offer:
     post:
       requestBody:

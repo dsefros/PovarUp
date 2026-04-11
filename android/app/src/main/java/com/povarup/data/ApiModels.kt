@@ -27,9 +27,7 @@ data class ShiftDto(
     val status: String
 )
 
-data class CreateApplicationRequest(
-    val shiftId: String
-)
+data class CreateApplicationRequest(val shiftId: String)
 
 data class ApplicationDto(
     val id: String,
@@ -38,19 +36,38 @@ data class ApplicationDto(
     val status: String
 )
 
-data class CreateSessionRequest(
-    val userId: String,
-    val role: String
+data class LoginRequest(val userId: String, val password: String)
+
+data class SessionDto(val token: String, val userId: String, val role: String, val displayName: String? = null)
+
+data class SessionToken(val token: String, val userId: String, val role: String)
+
+data class AssignmentDto(
+    val id: String,
+    val shiftId: String,
+    val workerId: String,
+    val businessId: String,
+    val status: String,
+    val escrowLockedCents: Int
 )
 
-data class SessionDto(
-    val token: String,
-    val userId: String,
-    val role: String
+data class CreateShiftRequest(
+    val locationId: String,
+    val title: String,
+    val startAt: String,
+    val endAt: String,
+    val payRateCents: Int
 )
 
-data class SessionToken(
-    val token: String,
-    val userId: String,
-    val role: String
+data class OfferAssignmentRequest(val applicationId: String)
+data class AttendanceRequest(val assignmentId: String)
+data class ReleasePayoutRequest(val force: Boolean = false)
+
+data class PayoutDto(
+    val id: String,
+    val assignmentId: String,
+    val workerId: String,
+    val amountCents: Int,
+    val status: String,
+    val createdAt: String
 )

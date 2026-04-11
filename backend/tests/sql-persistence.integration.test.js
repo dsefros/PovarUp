@@ -16,11 +16,11 @@ async function startServer(dbPath) {
   };
 }
 
-async function createSession(base, userId, role) {
-  const res = await fetch(`${base}/api/auth/session`, {
+async function createSession(base, userId, password) {
+  const res = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ userId, role })
+    body: JSON.stringify({ userId, password })
   });
   assert.equal(res.status, 200);
   return res.json();
@@ -35,8 +35,8 @@ test('sql-backed lifecycle persists across server restarts', async () => {
   let assignmentId;
 
   try {
-    workerSession = await createSession(run1.base, 'u_worker_1', 'worker');
-    businessSession = await createSession(run1.base, 'u_biz_1', 'business');
+    workerSession = await createSession(run1.base, 'worker.demo', 'workerpass');
+    businessSession = await createSession(run1.base, 'business.demo', 'businesspass');
 
     const appRes = await fetch(`${run1.base}/api/applications`, {
       method: 'POST',
@@ -68,8 +68,8 @@ test('sql-backed lifecycle persists across server restarts', async () => {
 
   const run2 = await startServer(dbPath);
   try {
-    const workerSession2 = await createSession(run2.base, 'u_worker_1', 'worker');
-    const businessSession2 = await createSession(run2.base, 'u_biz_1', 'business');
+    const workerSession2 = await createSession(run2.base, 'worker.demo', 'workerpass');
+    const businessSession2 = await createSession(run2.base, 'business.demo', 'businesspass');
 
     const assignmentsRes = await fetch(`${run2.base}/api/assignments`, {
       headers: { authorization: `Bearer ${workerSession2.token}` }

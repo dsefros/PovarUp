@@ -11,8 +11,15 @@ const { handleError } = require('./http/http');
 function createSqlSeed(database) {
   return () => {
     database.exec(`
-      INSERT OR IGNORE INTO worker_profiles (id, user_id, name, rating_avg) VALUES ('worker_1', 'u_worker_1', 'Alex Cook', 4.8);
-      INSERT OR IGNORE INTO businesses (id, user_id, name) VALUES ('biz_1', 'u_biz_1', 'Kitchen Hub');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_worker_1', 'worker.demo', 'workerpass', 'worker', 'Alex Cook');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_biz_1', 'business.demo', 'businesspass', 'business', 'Kitchen Hub Manager');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_admin_1', 'admin.demo', 'adminpass', 'admin', 'Platform Admin');
+      INSERT OR IGNORE INTO accounts (id, user_id, password, role, display_name) VALUES ('acct_worker_2', 'worker2.demo', 'worker2pass', 'worker', 'Sam Prep');
+      INSERT OR IGNORE INTO onboarding_invites (code, role, business_name, location_name, location_address) VALUES ('WORKER-DEMO-2026', 'worker', null, null, null);
+      INSERT OR IGNORE INTO onboarding_invites (code, role, business_name, location_name, location_address) VALUES ('BUSINESS-DEMO-2026', 'business', 'New Business', 'Primary Kitchen', 'TBD');
+      INSERT OR IGNORE INTO worker_profiles (id, user_id, name, rating_avg) VALUES ('worker_1', 'worker.demo', 'Alex Cook', 4.8);
+      INSERT OR IGNORE INTO worker_profiles (id, user_id, name, rating_avg) VALUES ('worker_2', 'worker2.demo', 'Sam Prep', 4.7);
+      INSERT OR IGNORE INTO businesses (id, user_id, name) VALUES ('biz_1', 'business.demo', 'Kitchen Hub');
       INSERT OR IGNORE INTO locations (id, business_id, name, address) VALUES ('loc_1', 'biz_1', 'Downtown Kitchen', '100 Main St');
       INSERT OR IGNORE INTO escrow_accounts (id, business_id, balance_cents) VALUES ('escrow_biz_1', 'biz_1', 500000);
       INSERT OR IGNORE INTO shifts (id, business_id, location_id, title, start_at, end_at, pay_rate_cents, status, created_at)
