@@ -54,6 +54,11 @@ test('worker and business end-to-end MVP flow', async () => {
     });
     assert.equal(createShift.status, 201);
     const createdShift = (await createShift.json()).item;
+    const publishShift = await fetch(`${base}/api/shifts/${createdShift.id}/publish`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${business.body.token}` }
+    });
+    assert.equal(publishShift.status, 200);
 
     const shiftDetailRes = await fetch(`${base}/api/shifts/${createdShift.id}`);
     assert.equal(shiftDetailRes.status, 200);
@@ -106,8 +111,8 @@ test('worker and business end-to-end MVP flow', async () => {
     });
     const assignmentDetail = await assignmentDetailRes.json();
     assert.equal(assignmentDetailRes.status, 200);
-    assert.equal(assignmentDetail.item.status, 'completed_pending_rating');
-    assert.equal(assignmentDetail.item.productStatus, 'checked_out');
+    assert.equal(assignmentDetail.item.status, 'completed');
+    assert.equal(assignmentDetail.item.productStatus, 'completed');
 
     const payoutRes = await fetch(`${base}/api/escrow/release/${assignment.id}`, {
       method: 'POST',

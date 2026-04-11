@@ -223,3 +223,22 @@ test('sensitive reads enforce authorization', async () => {
     assert.equal(validBody.items.length, 1);
   });
 });
+
+test('deprecated accept endpoint acts as compatibility no-op for assignment participants', async () => {
+  await withServer(async (base, assignmentId) => {
+    const worker = await createSession(base, 'worker.demo', 'workerpass');
+    const biz = await createSession(base, 'business.demo', 'businesspass');
+
+    const workerRes = await fetch(`${base}/api/assignments/${assignmentId}/accept`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${worker.token}` }
+    });
+    assert.equal(workerRes.status, 200);
+
+    const bizRes = await fetch(`${base}/api/assignments/${assignmentId}/accept`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${biz.token}` }
+    });
+    assert.equal(bizRes.status, 200);
+  });
+});

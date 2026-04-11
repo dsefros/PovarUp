@@ -63,6 +63,39 @@ function createApp({ repo, seed, service }) {
       return send(res, 201, { item: shiftDto(item, repo.listAssignments()) });
     }
 
+    if (path.match(/^\/api\/shifts\/[^/]+\/publish$/) && method === 'POST') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      const shiftId = path.split('/')[3];
+      const shift = repo.findShiftById(shiftId);
+      if (!shift) throw error('shift_not_found', 'shift not found', { status: 404 });
+      if (actor.session.role !== 'admin' && (!actor.business || shift.business_id !== actor.business.id)) {
+        throw error('forbidden', 'Only owner business/admin can publish shift', { status: 403 });
+      }
+      return send(res, 200, { item: shiftDto(service.updateShiftStatus(shiftId, 'published', actor.session.role), repo.listAssignments()) });
+    }
+
+    if (path.match(/^\/api\/shifts\/[^/]+\/close$/) && method === 'POST') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      const shiftId = path.split('/')[3];
+      const shift = repo.findShiftById(shiftId);
+      if (!shift) throw error('shift_not_found', 'shift not found', { status: 404 });
+      if (actor.session.role !== 'admin' && (!actor.business || shift.business_id !== actor.business.id)) {
+        throw error('forbidden', 'Only owner business/admin can close shift', { status: 403 });
+      }
+      return send(res, 200, { item: shiftDto(service.updateShiftStatus(shiftId, 'closed', actor.session.role), repo.listAssignments()) });
+    }
+
+    if (path.match(/^\/api\/shifts\/[^/]+\/cancel$/) && method === 'POST') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      const shiftId = path.split('/')[3];
+      const shift = repo.findShiftById(shiftId);
+      if (!shift) throw error('shift_not_found', 'shift not found', { status: 404 });
+      if (actor.session.role !== 'admin' && (!actor.business || shift.business_id !== actor.business.id)) {
+        throw error('forbidden', 'Only owner business/admin can cancel shift', { status: 403 });
+      }
+      return send(res, 200, { item: shiftDto(service.updateShiftStatus(shiftId, 'cancelled', actor.session.role), repo.listAssignments()) });
+    }
+
     if (path.match(/^\/api\/shifts\/[^/]+$/) && method === 'GET') {
       const shiftId = path.split('/')[3];
       const item = repo.findShiftById(shiftId);
@@ -101,6 +134,28 @@ function createApp({ repo, seed, service }) {
       return send(res, 201, { item: applicationDto(item) });
     }
 
+    if (path.match(/^\/api\/applications\/[^/]+\/reject$/) && method === 'POST') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      const applicationId = path.split('/')[3];
+      const application = repo.findApplicationById(applicationId);
+      if (!application) throw error('application_not_found', 'application not found', { status: 404 });
+      const shift = repo.findShiftById(application.shift_id);
+      const isOwnerBusiness = actor.business && shift && shift.business_id === actor.business.id;
+      if (actor.session.role !== 'admin' && !isOwnerBusiness) throw error('forbidden', 'Only owner business/admin can reject', { status: 403 });
+      return send(res, 200, { item: applicationDto(service.rejectApplication(applicationId, actor.session.role)) });
+    }
+
+    if (path.match(/^\/api\/applications\/[^/]+\/withdraw$/) && method === 'POST') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      const applicationId = path.split('/')[3];
+      const application = repo.findApplicationById(applicationId);
+      if (!application) throw error('application_not_found', 'application not found', { status: 404 });
+      if (actor.session.role !== 'worker' || !actor.worker || application.worker_id !== actor.worker.id) {
+        throw error('forbidden', 'Only application worker can withdraw', { status: 403 });
+      }
+      return send(res, 200, { item: applicationDto(service.withdrawApplication(applicationId, actor.session.role)) });
+    }
+
     if (path === '/api/assignments' && method === 'GET') {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       const items = repo.listAssignments().filter((a) => canAccessAssignment(actor, a)).map((a) => assignmentDto(a, payoutIndex(repo)));
@@ -127,10 +182,21 @@ function createApp({ repo, seed, service }) {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       const aid = path.split('/')[3];
       const assignment = repo.findAssignmentById(aid);
-      if (actor.session.role !== 'worker' || !actor.worker || !assignment || assignment.worker_id !== actor.worker.id) {
-        throw error('forbidden', 'Only assigned worker can accept', { status: 403 });
-      }
+      if (!assignment) throw error('assignment_not_found', 'assignment not found', { status: 404 });
+      if (!canAccessAssignment(actor, assignment)) throw error('forbidden', 'Assignment access denied', { status: 403 });
       return send(res, 200, { item: assignmentDto(service.acceptAssignment(aid), payoutIndex(repo)) });
+    }
+
+    if (path.match(/^\/api\/assignments\/[^/]+\/cancel$/) && method === 'POST') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      const aid = path.split('/')[3];
+      const assignment = repo.findAssignmentById(aid);
+      if (!assignment) throw error('assignment_not_found', 'assignment not found', { status: 404 });
+      const isOwnerBusiness = actor.business && assignment.business_id === actor.business.id;
+      if (actor.session.role !== 'admin' && !isOwnerBusiness) {
+        throw error('forbidden', 'Only owner business/admin can cancel assignment', { status: 403 });
+      }
+      return send(res, 200, { item: assignmentDto(service.cancelAssignment(aid, actor.session.role), payoutIndex(repo)) });
     }
 
     if (path === '/api/attendance/check-in' && method === 'POST') {

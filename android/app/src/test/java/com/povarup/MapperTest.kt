@@ -18,13 +18,13 @@ class MapperTest {
             startAt = "2026-04-08T10:00:00Z",
             endAt = "2026-04-08T14:00:00Z",
             payRateCents = 2500,
-            status = "open"
+            status = "published"
         )
 
         val model = dto.toDomain()
         assertEquals("biz_1", model.businessId)
         assertEquals(2500, model.payRateCents)
-        assertEquals("open", model.status)
+        assertEquals("published", model.status)
     }
 
     @Test

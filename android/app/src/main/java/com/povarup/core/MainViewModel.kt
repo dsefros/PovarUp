@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import android.util.Log
 import java.time.Duration
 import java.time.Instant
 
@@ -92,11 +93,6 @@ class MainViewModel(
         runAsync("apply:${normalizedShiftId}", "Applied") { repository.applyToShift(normalizedShiftId) }
     }
 
-    fun acceptAssignment(assignmentId: String) {
-        if (!guardRole("worker", "Only workers can accept offers.")) return
-        runAsync("accept:${assignmentId.trim()}", "Offer accepted") { repository.acceptAssignment(assignmentId.trim()) }
-    }
-
     fun checkIn(assignmentId: String) {
         if (!guardRole("worker", "Only workers can check in.")) return
         runAsync("checkin:${assignmentId.trim()}", "Check-in completed") { repository.checkIn(assignmentId.trim()) }
@@ -116,6 +112,36 @@ class MainViewModel(
     fun offerAssignment(applicationId: String) {
         if (!guardRole("business", "Only businesses can offer assignments.")) return
         runAsync("offer:${applicationId.trim()}", "Offer sent") { repository.offerAssignment(applicationId.trim()) }
+    }
+
+    fun withdrawApplication(applicationId: String) {
+        if (!guardRole("worker", "Only workers can withdraw applications.")) return
+        runAsync("withdraw:${applicationId.trim()}", "Application withdrawn") { repository.withdrawApplication(applicationId.trim()) }
+    }
+
+    fun rejectApplication(applicationId: String) {
+        if (!guardRole("business", "Only businesses can reject applications.")) return
+        runAsync("reject:${applicationId.trim()}", "Application rejected") { repository.rejectApplication(applicationId.trim()) }
+    }
+
+    fun closeShift(shiftId: String) {
+        if (!guardRole("business", "Only businesses can close shifts.")) return
+        runAsync("close_shift:${shiftId.trim()}", "Shift closed") { repository.closeShift(shiftId.trim()) }
+    }
+
+    fun publishShift(shiftId: String) {
+        if (!guardRole("business", "Only businesses can publish shifts.")) return
+        runAsync("publish_shift:${shiftId.trim()}", "Shift published") { repository.publishShift(shiftId.trim()) }
+    }
+
+    fun cancelShift(shiftId: String) {
+        if (!guardRole("business", "Only businesses can cancel shifts.")) return
+        runAsync("cancel_shift:${shiftId.trim()}", "Shift cancelled") { repository.cancelShift(shiftId.trim()) }
+    }
+
+    fun cancelAssignment(assignmentId: String) {
+        if (!guardRole("business", "Only businesses can cancel assignments.")) return
+        runAsync("cancel_assignment:${assignmentId.trim()}", "Assignment cancelled") { repository.cancelAssignment(assignmentId.trim()) }
     }
 
     fun releasePayout(assignmentId: String) {
@@ -174,6 +200,7 @@ class MainViewModel(
         if (_uiState.value.inFlightActionKeys.contains(actionKey)) return
         _uiState.value = _uiState.value.copy(inFlightActionKeys = _uiState.value.inFlightActionKeys + actionKey, errorMessage = null)
         viewModelScope.launch(dispatchers.io) {
+            Log.i("PovarUp", "action_start key=$actionKey")
             val result = action()
             if (result.isFailure) {
                 val message = result.exceptionOrNull()?.message ?: "Request failed"
@@ -182,6 +209,7 @@ class MainViewModel(
                     statusMessage = null,
                     inFlightActionKeys = _uiState.value.inFlightActionKeys - actionKey
                 )
+                Log.w("PovarUp", "action_failed key=$actionKey message=$message")
                 return@launch
             }
 
@@ -192,6 +220,7 @@ class MainViewModel(
                 errorMessage = null,
                 inFlightActionKeys = _uiState.value.inFlightActionKeys - actionKey
             )
+            Log.i("PovarUp", "action_success key=$actionKey")
             refreshDashboardState(keepStatusMessage = true)
         }
     }
@@ -269,22 +298,17 @@ class MainViewModel(
         val shiftById = shifts.associateBy { it.id }
         val events = mutableListOf<String>()
 
-        assignments.filter { it.productStatus == "offered" }.forEach { assignment ->
+        assignments.filter { it.productStatus == "assigned" }.forEach { assignment ->
             val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
-            events += "Offer received: $shiftTitle (${assignment.id})."
+            events += "Assigned: $shiftTitle (${assignment.id})."
         }
 
-        assignments.filter { it.productStatus == "active" }.forEach { assignment ->
+        assignments.filter { it.productStatus == "in_progress" }.forEach { assignment ->
             val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
-            events += "Offer accepted: $shiftTitle (${assignment.id})."
+            events += "In progress: $shiftTitle (${assignment.id})."
         }
 
-        assignments.filter { it.productStatus == "checked_in" }.forEach { assignment ->
-            val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
-            events += "Checked in: $shiftTitle (${assignment.id}) is in progress."
-        }
-
-        assignments.filter { it.productStatus == "checked_out" || it.productStatus == "completed" || it.productStatus == "paid" }.forEach { assignment ->
+        assignments.filter { it.productStatus == "completed" || it.productStatus == "paid" }.forEach { assignment ->
             val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
             events += "Checked out: $shiftTitle (${assignment.id}) completed."
         }
@@ -298,7 +322,7 @@ class MainViewModel(
         }
 
         val soon = assignments.firstOrNull { assignment ->
-            if (assignment.productStatus !in setOf("offered", "active")) return@firstOrNull false
+            if (assignment.productStatus !in setOf("assigned", "in_progress")) return@firstOrNull false
             val shift = shiftById[assignment.shiftId] ?: return@firstOrNull false
             val start = runCatching { Instant.parse(shift.startAt) }.getOrNull() ?: return@firstOrNull false
             val minutes = Duration.between(Instant.now(), start).toMinutes()

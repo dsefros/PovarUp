@@ -24,6 +24,7 @@ function createSqlMarketplaceRepository(db) {
     listAssignments: db.prepare('SELECT * FROM assignments ORDER BY created_at, id'),
     listMessagesByChatId: db.prepare('SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at, id'),
     listPayoutsByWorkerId: db.prepare('SELECT * FROM payouts WHERE worker_id = ? ORDER BY created_at, id'),
+    listEscrowTransactions: db.prepare('SELECT * FROM escrow_transactions ORDER BY created_at, id'),
     listPayouts: db.prepare('SELECT * FROM payouts ORDER BY created_at, id'),
     listViolationFlags: db.prepare('SELECT * FROM violation_flags ORDER BY created_at, id'),
     listAccounts: db.prepare('SELECT * FROM accounts ORDER BY created_at, id'),
@@ -69,6 +70,7 @@ function createSqlMarketplaceRepository(db) {
     updateApplicationStatus: db.prepare('UPDATE applications SET status = ? WHERE id = ?'),
     updateAssignmentState: db.prepare('UPDATE assignments SET status = ?, accepted_at = COALESCE(?, accepted_at) WHERE id = ?'),
     updateShiftTimes: db.prepare('UPDATE shifts SET start_at = ?, end_at = ? WHERE id = ?'),
+    updateShiftStatus: db.prepare('UPDATE shifts SET status = ? WHERE id = ?'),
     updatePayoutStatus: db.prepare('UPDATE payouts SET status = ?, updated_at = ?, note = ? WHERE id = ?'),
     updateAccountPassword: db.prepare('UPDATE accounts SET password = ? WHERE user_id = ?')
   };
@@ -99,6 +101,7 @@ function createSqlMarketplaceRepository(db) {
     listAssignments: () => list(q.listAssignments),
     listMessagesByChatId: (chatId) => list(q.listMessagesByChatId, [chatId]),
     listPayoutsByWorkerId: (workerId) => list(q.listPayoutsByWorkerId, [workerId]),
+    listEscrowTransactions: () => list(q.listEscrowTransactions),
     listPayouts: () => list(q.listPayouts),
     listViolationFlags: () => list(q.listViolationFlags),
     listAccounts: () => list(q.listAccounts),
@@ -144,6 +147,7 @@ function createSqlMarketplaceRepository(db) {
     updateApplicationStatus: (applicationId, status) => q.updateApplicationStatus.run(status, applicationId),
     updateAssignmentState: (assignmentId, status, acceptedAt = null) => q.updateAssignmentState.run(status, acceptedAt, assignmentId),
     updateShiftTimes: (shiftId, startAt, endAt) => q.updateShiftTimes.run(startAt, endAt, shiftId),
+    updateShiftStatus: (shiftId, status) => q.updateShiftStatus.run(status, shiftId),
     updatePayoutStatus: (payoutId, status, updatedAt, note = null) => q.updatePayoutStatus.run(status, updatedAt, note, payoutId),
     updateAccountPassword: (userId, password) => q.updateAccountPassword.run(password, userId)
   };
