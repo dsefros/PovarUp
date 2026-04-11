@@ -1,12 +1,18 @@
 package com.povarup
 
 import com.povarup.data.ApiError
+import com.povarup.data.ApiItemEnvelope
 import com.povarup.data.ApiListEnvelope
 import com.povarup.data.ApiMarketplaceRepository
+import com.povarup.data.CreateSessionRequest
 import com.povarup.data.MarketplaceApi
 import com.povarup.data.MarketplaceError
+import com.povarup.data.SessionDto
+import com.povarup.data.SessionStore
+import com.povarup.data.SessionToken
 import com.povarup.data.ShiftDto
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
@@ -15,7 +21,7 @@ class ApiMarketplaceRepositoryTest {
     @Test
     fun listShiftsMapsItemsToDomain() {
         val api = object : MarketplaceApi {
-            override fun fetchShifts(baseUrl: String): Result<ApiListEnvelope<ShiftDto>> = Result.success(
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> = Result.success(
                 ApiListEnvelope(
                     items = listOf(
                         ShiftDto(
@@ -31,6 +37,10 @@ class ApiMarketplaceRepositoryTest {
                     )
                 )
             )
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> {
+                error("Not used")
+            }
         }
 
         val repository = ApiMarketplaceRepository(api = api, baseUrlProvider = { "http://localhost:4000/api" })
@@ -41,11 +51,57 @@ class ApiMarketplaceRepositoryTest {
     }
 
     @Test
+    fun createSessionPersistsTokenAndUsesItForProtectedCalls() {
+        val recordingStore = RecordingSessionStore()
+        val api = object : MarketplaceApi {
+            var lastBearerToken: String? = null
+
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> {
+                lastBearerToken = bearerToken
+                return Result.success(ApiListEnvelope(items = emptyList()))
+            }
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
+                Result.success(ApiItemEnvelope(item = SessionDto(token = "sess_123", userId = request.userId, role = request.role)))
+        }
+
+        val repository = ApiMarketplaceRepository(api = api, sessionStore = recordingStore)
+
+        val created = repository.createSession(userId = "u_worker_1", role = "worker")
+        assertTrue(created.isSuccess)
+        assertEquals("sess_123", recordingStore.load()?.token)
+
+        repository.listShifts()
+        assertEquals("sess_123", api.lastBearerToken)
+    }
+
+    @Test
+    fun createSessionReturnsTypedApiFailureWhenApiReturnsErrorEnvelope() {
+        val api = object : MarketplaceApi {
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> =
+                Result.success(ApiListEnvelope(items = emptyList()))
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
+                Result.success(ApiItemEnvelope(error = ApiError(code = "forbidden", message = "Not authorized")))
+        }
+
+        val repository = ApiMarketplaceRepository(api = api)
+        val result = repository.createSession(userId = "u_worker_1", role = "worker")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is MarketplaceError.Api)
+    }
+
+    @Test
     fun listShiftsReturnsTypedApiFailureWhenApiReturnsErrorEnvelope() {
         val api = object : MarketplaceApi {
-            override fun fetchShifts(baseUrl: String): Result<ApiListEnvelope<ShiftDto>> = Result.success(
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> = Result.success(
                 ApiListEnvelope(error = ApiError(code = "forbidden", message = "Not authorized"))
             )
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> {
+                error("Not used")
+            }
         }
 
         val repository = ApiMarketplaceRepository(api = api)
@@ -58,8 +114,12 @@ class ApiMarketplaceRepositoryTest {
     @Test
     fun listShiftsPassesThroughNetworkFailure() {
         val api = object : MarketplaceApi {
-            override fun fetchShifts(baseUrl: String): Result<ApiListEnvelope<ShiftDto>> =
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> =
                 Result.failure(MarketplaceError.Network(IOException("timeout")))
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> {
+                error("Not used")
+            }
         }
 
         val repository = ApiMarketplaceRepository(api = api)
@@ -67,5 +127,38 @@ class ApiMarketplaceRepositoryTest {
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is MarketplaceError.Network)
+    }
+
+    @Test
+    fun clearSessionRemovesPersistedToken() {
+        val api = object : MarketplaceApi {
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> =
+                Result.success(ApiListEnvelope(items = emptyList()))
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
+                Result.success(ApiItemEnvelope(item = SessionDto(token = "sess_123", userId = request.userId, role = request.role)))
+        }
+
+        val store = RecordingSessionStore()
+        val repository = ApiMarketplaceRepository(api = api, sessionStore = store)
+        repository.createSession("u_worker_1", "worker")
+
+        repository.clearSession()
+
+        assertNull(repository.currentSession())
+    }
+
+    private class RecordingSessionStore : SessionStore {
+        private var session: SessionToken? = null
+
+        override fun load(): SessionToken? = session
+
+        override fun save(session: SessionToken) {
+            this.session = session
+        }
+
+        override fun clear() {
+            session = null
+        }
     }
 }

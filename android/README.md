@@ -15,6 +15,19 @@ cd android
 ./gradlew testDebugUnitTest -PbackendBaseUrl=http://localhost:4000/api
 ```
 
+## Minimal session-aware flow
+The Android client now uses backend sessions via `POST /api/auth/session` with:
+
+```json
+{"userId":"u_worker_1","role":"worker"}
+```
+
+For local seeded backend testing, practical defaults are:
+- worker: `u_worker_1`
+- business: `u_biz_1`
+
+The app stores `{token,userId,role}` in `SharedPreferences` (`povarup_session`) and automatically sends `Authorization: Bearer <token>` for API-backed shifts calls.
+
 ## Android SDK setup
 Gradle Android tasks require an installed Android SDK and `local.properties` with `sdk.dir=...`.
 
