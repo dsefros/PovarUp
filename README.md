@@ -55,3 +55,14 @@ The backend test suite validates lifecycle invariants, auth-protected mutating r
 Schema ownership note: runtime application tables are migration-owned (`backend/migrations/*.sql`). The runtime bootstrap seeds data only and does not define domain tables.
 
 SQLite runtime stance: this project currently uses Node's built-in `node:sqlite` API (experimental in Node 22) for local and CI persistence verification. Treat this as acceptable for current development/test usage; if production hardening requires non-experimental DB APIs, switch to a stable driver before production rollout.
+
+
+## MVP auth + flows demo accounts
+
+Use login endpoint `POST /api/auth/login` with seeded credentials:
+
+- worker.demo / workerpass
+- business.demo / businesspass
+- admin.demo / adminpass
+
+Optional onboarding endpoint: `POST /api/auth/onboard` with invite code `WORKER-DEMO-2026` or `BUSINESS-DEMO-2026`.

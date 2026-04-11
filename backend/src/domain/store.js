@@ -4,6 +4,8 @@ const nowIso = () => new Date().toISOString();
 
 const db = {
   sessions: [],
+  accounts: [],
+  onboarding_invites: [],
   worker_profiles: [],
   businesses: [],
   locations: [],
@@ -24,8 +26,15 @@ const id = (prefix) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 10)}
 
 function seed() {
   if (db.worker_profiles.length) return;
-  db.worker_profiles.push({ id: 'worker_1', user_id: 'u_worker_1', name: 'Alex Cook', rating_avg: 4.8 });
-  db.businesses.push({ id: 'biz_1', user_id: 'u_biz_1', name: 'Kitchen Hub' });
+  db.accounts.push({ id: 'acct_worker_1', user_id: 'worker.demo', password: 'workerpass', role: 'worker', display_name: 'Alex Cook' });
+  db.accounts.push({ id: 'acct_biz_1', user_id: 'business.demo', password: 'businesspass', role: 'business', display_name: 'Kitchen Hub Manager' });
+  db.accounts.push({ id: 'acct_admin_1', user_id: 'admin.demo', password: 'adminpass', role: 'admin', display_name: 'Platform Admin' });
+  db.accounts.push({ id: 'acct_worker_2', user_id: 'worker2.demo', password: 'worker2pass', role: 'worker', display_name: 'Sam Prep' });
+  db.onboarding_invites.push({ code: 'WORKER-DEMO-2026', role: 'worker' });
+  db.onboarding_invites.push({ code: 'BUSINESS-DEMO-2026', role: 'business', business_name: 'New Business', location_name: 'Primary Kitchen', location_address: 'TBD' });
+  db.worker_profiles.push({ id: 'worker_1', user_id: 'worker.demo', name: 'Alex Cook', rating_avg: 4.8 });
+  db.worker_profiles.push({ id: 'worker_2', user_id: 'worker2.demo', name: 'Sam Prep', rating_avg: 4.7 });
+  db.businesses.push({ id: 'biz_1', user_id: 'business.demo', name: 'Kitchen Hub' });
   db.locations.push({ id: 'loc_1', business_id: 'biz_1', name: 'Downtown Kitchen', address: '100 Main St' });
   db.escrow_accounts.push({ id: 'escrow_biz_1', business_id: 'biz_1', balance_cents: 500000 });
   db.shifts.push({

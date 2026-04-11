@@ -2,8 +2,11 @@ package com.povarup.data
 
 import com.google.gson.Gson
 import com.google.gson.JsonParseException
+import com.google.gson.reflect.TypeToken
 import com.povarup.core.NetworkConfig
 import com.povarup.domain.Application
+import com.povarup.domain.Assignment
+import com.povarup.domain.Payout
 import com.povarup.domain.Shift
 import java.io.BufferedReader
 import java.io.IOException
@@ -16,185 +19,75 @@ interface MarketplaceRepository {
     fun setRole(role: String)
     fun baseUrl(): String
     fun currentSession(): SessionToken?
-    fun createSession(userId: String, role: String): Result<SessionToken>
+    fun login(userId: String, password: String): Result<SessionToken>
     fun clearSession()
     fun listShifts(): Result<List<Shift>>
+    fun getShift(shiftId: String): Result<Shift>
     fun applyToShift(shiftId: String): Result<Application>
-}
-
-class InMemoryMarketplaceRepository(
-    private val sessionStore: SessionStore = InMemorySessionStore()
-) : MarketplaceRepository {
-    private var role: String = "worker"
-
-    override fun currentRole(): String = role
-
-    override fun setRole(role: String) {
-        this.role = role
-    }
-
-    override fun baseUrl(): String = NetworkConfig.baseUrl()
-
-    override fun currentSession(): SessionToken? = sessionStore.load()
-
-    override fun createSession(userId: String, role: String): Result<SessionToken> {
-        val session = SessionToken(token = "in_memory_session", userId = userId, role = role)
-        sessionStore.save(session)
-        setRole(role)
-        return Result.success(session)
-    }
-
-    override fun clearSession() {
-        sessionStore.clear()
-    }
-
-    override fun listShifts(): Result<List<Shift>> = Result.success(emptyList())
-
-    override fun applyToShift(shiftId: String): Result<Application> =
-        Result.failure(MarketplaceError.Unexpected(UnsupportedOperationException("In-memory apply flow not implemented")))
+    fun listApplications(): Result<List<Application>>
+    fun listAssignments(): Result<List<Assignment>>
+    fun getAssignment(assignmentId: String): Result<Assignment>
+    fun acceptAssignment(assignmentId: String): Result<Assignment>
+    fun checkIn(assignmentId: String): Result<Unit>
+    fun checkOut(assignmentId: String): Result<Unit>
+    fun createShift(input: CreateShiftRequest): Result<Shift>
+    fun listBusinessShifts(): Result<List<Shift>>
+    fun listShiftApplications(shiftId: String): Result<List<Application>>
+    fun offerAssignment(applicationId: String): Result<Assignment>
+    fun releasePayout(assignmentId: String): Result<Payout>
 }
 
 interface MarketplaceApi {
-    fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>>
-    fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>>
-    fun createApplication(
-        baseUrl: String,
-        bearerToken: String?,
-        request: CreateApplicationRequest
-    ): Result<ApiItemEnvelope<ApplicationDto>>
+    fun <T> get(baseUrl: String, path: String, bearerToken: String?, type: java.lang.reflect.Type): Result<T>
+    fun <T> post(baseUrl: String, path: String, bearerToken: String?, request: Any?, type: java.lang.reflect.Type): Result<T>
 }
 
 class MarketplaceApiClient(private val gson: Gson = Gson()) : MarketplaceApi {
-    override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> = runCatching {
-        val endpoint = "${baseUrl}/shifts"
-        val connection = buildConnection(endpoint = endpoint, method = "GET", bearerToken = bearerToken)
+    override fun <T> get(baseUrl: String, path: String, bearerToken: String?, type: java.lang.reflect.Type): Result<T> =
+        request(baseUrl, path, "GET", bearerToken, null, type)
 
-        try {
-            val code = connection.responseCode
-            val body = readResponseBody(connection, code)
-            if (code in 200..299) {
-                gson.fromJson(body.orEmpty(), ShiftListResponse::class.java).toEnvelope()
-            } else {
-                ApiListEnvelope(error = parseApiError(body, code))
-            }
-        } catch (ioe: IOException) {
-            throw MarketplaceError.Network(ioe)
-        } catch (jsonError: JsonParseException) {
-            throw MarketplaceError.Unexpected(jsonError)
-        } finally {
-            connection.disconnect()
-        }
-    }
+    override fun <T> post(baseUrl: String, path: String, bearerToken: String?, request: Any?, type: java.lang.reflect.Type): Result<T> =
+        request(baseUrl, path, "POST", bearerToken, request?.let { gson.toJson(it) }, type)
 
-    override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> = runCatching {
-        val endpoint = "${baseUrl}/auth/session"
-        val connection = buildConnection(endpoint = endpoint, method = "POST", requestBody = gson.toJson(request))
-
-        try {
-            writeRequestBody(connection, gson.toJson(request))
-
-            val code = connection.responseCode
-            val body = readResponseBody(connection, code)
-            if (code in 200..299) {
-                ApiItemEnvelope(item = gson.fromJson(body.orEmpty(), SessionDto::class.java))
-            } else {
-                ApiItemEnvelope(error = parseApiError(body, code))
-            }
-        } catch (ioe: IOException) {
-            throw MarketplaceError.Network(ioe)
-        } catch (jsonError: JsonParseException) {
-            throw MarketplaceError.Unexpected(jsonError)
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    override fun createApplication(
+    private fun <T> request(
         baseUrl: String,
+        path: String,
+        method: String,
         bearerToken: String?,
-        request: CreateApplicationRequest
-    ): Result<ApiItemEnvelope<ApplicationDto>> = runCatching {
-        val endpoint = "${baseUrl}/applications"
-        val payload = gson.toJson(request)
-        val connection = buildConnection(
-            endpoint = endpoint,
-            method = "POST",
-            bearerToken = bearerToken,
-            requestBody = payload
-        )
-
+        payload: String?,
+        type: java.lang.reflect.Type
+    ): Result<T> = runCatching {
+        val endpoint = "$baseUrl$path"
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 5_000
+            readTimeout = 5_000
+            setRequestProperty("Accept", "application/json")
+            if (!bearerToken.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $bearerToken")
+            if (payload != null) {
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+            }
+        }
         try {
-            writeRequestBody(connection, payload)
-
+            if (payload != null) connection.outputStream.use { it.write(payload.toByteArray()) }
             val code = connection.responseCode
             val body = readResponseBody(connection, code)
-            if (code in 200..299) {
-                ApiItemEnvelope(item = gson.fromJson(body.orEmpty(), ApplicationItemResponse::class.java).item)
-            } else {
-                ApiItemEnvelope(error = parseApiError(body, code))
-            }
+            if (code !in 200..299) throw MarketplaceError.Api(code = "http_error", apiMessage = body ?: "HTTP $code")
+            gson.fromJson(body.orEmpty(), type)
         } catch (ioe: IOException) {
             throw MarketplaceError.Network(ioe)
         } catch (jsonError: JsonParseException) {
             throw MarketplaceError.Unexpected(jsonError)
         } finally {
             connection.disconnect()
-        }
-    }
-
-    private fun buildConnection(
-        endpoint: String,
-        method: String,
-        bearerToken: String? = null,
-        requestBody: String? = null
-    ): HttpURLConnection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-        requestMethod = method
-        connectTimeout = 5_000
-        readTimeout = 5_000
-        setRequestProperty("Accept", "application/json")
-        if (!bearerToken.isNullOrBlank()) {
-            setRequestProperty("Authorization", "Bearer $bearerToken")
-        }
-        if (requestBody != null) {
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-        }
-    }
-
-    private fun writeRequestBody(connection: HttpURLConnection, body: String) {
-        connection.outputStream.use { output ->
-            output.write(body.toByteArray())
         }
     }
 
     private fun readResponseBody(connection: HttpURLConnection, code: Int): String? {
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-        return stream?.use { input ->
-            BufferedReader(InputStreamReader(input)).readText()
-        }
+        return stream?.use { BufferedReader(InputStreamReader(it)).readText() }
     }
-
-    private fun parseApiError(body: String?, code: Int): ApiError {
-        if (body.isNullOrBlank()) {
-            return ApiError(code = "http_error", message = "Request failed with HTTP $code")
-        }
-        return try {
-            gson.fromJson(body, ErrorResponse::class.java).error
-                ?: ApiError(code = "http_error", message = "Request failed with HTTP $code")
-        } catch (_: JsonParseException) {
-            ApiError(code = "http_error", message = "Request failed with HTTP $code")
-        }
-    }
-
-    private data class ShiftListResponse(
-        val items: List<ShiftDto> = emptyList(),
-        val error: ApiError? = null
-    ) {
-        fun toEnvelope(): ApiListEnvelope<ShiftDto> = ApiListEnvelope(items = items, error = error)
-    }
-
-    private data class ErrorResponse(val error: ApiError? = null)
-    private data class ApplicationItemResponse(val item: ApplicationDto? = null)
 }
 
 class ApiMarketplaceRepository(
@@ -203,76 +96,72 @@ class ApiMarketplaceRepository(
     private val sessionStore: SessionStore = InMemorySessionStore()
 ) : MarketplaceRepository {
     private var role: String = sessionStore.load()?.role ?: "worker"
+    private fun token(): String? = currentSession()?.token
 
     override fun currentRole(): String = role
-
-    override fun setRole(role: String) {
-        this.role = role
-    }
-
+    override fun setRole(role: String) { this.role = role }
     override fun baseUrl(): String = baseUrlProvider()
-
     override fun currentSession(): SessionToken? = sessionStore.load()
 
-    override fun createSession(userId: String, role: String): Result<SessionToken> {
-        val apiResult = api.createSession(baseUrl(), CreateSessionRequest(userId = userId, role = role))
-        if (apiResult.isFailure) {
-            val throwable = apiResult.exceptionOrNull() ?: MarketplaceError.Unexpected(Exception("Unknown API error"))
-            return Result.failure(throwable)
-        }
-
-        val response = apiResult.getOrThrow()
-        response.error?.let {
-            return Result.failure(MarketplaceError.Api(code = it.code, apiMessage = it.message, details = it.details))
-        }
-
-        val session = response.item?.toDomain()
-            ?: return Result.failure(MarketplaceError.Unexpected(IllegalStateException("Session payload missing")))
-
-        sessionStore.save(session)
-        setRole(session.role)
-        return Result.success(session)
+    override fun login(userId: String, password: String): Result<SessionToken> {
+        val t = object : TypeToken<SessionDto>() {}.type
+        val response = api.post<SessionDto>(baseUrl(), "/auth/login", null, LoginRequest(userId, password), t)
+        return response.map { it.toDomain().also { session -> sessionStore.save(session); setRole(session.role) } }
     }
 
-    override fun clearSession() {
-        sessionStore.clear()
-    }
+    override fun clearSession() { sessionStore.clear() }
 
-    override fun listShifts(): Result<List<Shift>> {
-        val apiResult = api.fetchShifts(baseUrl(), currentSession()?.token)
-        if (apiResult.isFailure) {
-            val throwable = apiResult.exceptionOrNull() ?: MarketplaceError.Unexpected(Exception("Unknown API error"))
-            return Result.failure(throwable)
-        }
+    override fun listShifts(): Result<List<Shift>> =
+        api.get<ApiListEnvelope<ShiftDto>>(baseUrl(), "/shifts", token(), object : TypeToken<ApiListEnvelope<ShiftDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
 
-        val response = apiResult.getOrThrow()
-        response.error?.let {
-            return Result.failure(MarketplaceError.Api(code = it.code, apiMessage = it.message, details = it.details))
-        }
+    override fun getShift(shiftId: String): Result<Shift> =
+        api.get<ApiItemEnvelope<ShiftDto>>(baseUrl(), "/shifts/$shiftId", token(), object : TypeToken<ApiItemEnvelope<ShiftDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing shift") }
 
-        return Result.success(response.items.map { it.toDomain() })
-    }
+    override fun applyToShift(shiftId: String): Result<Application> =
+        api.post<ApiItemEnvelope<ApplicationDto>>(baseUrl(), "/applications", token(), CreateApplicationRequest(shiftId), object : TypeToken<ApiItemEnvelope<ApplicationDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing application") }
 
-    override fun applyToShift(shiftId: String): Result<Application> {
-        val token = currentSession()?.token
-            ?: return Result.failure(MarketplaceError.Api(code = "unauthorized", apiMessage = "Create a session first"))
-        val apiResult = api.createApplication(
-            baseUrl = baseUrl(),
-            bearerToken = token,
-            request = CreateApplicationRequest(shiftId = shiftId)
-        )
-        if (apiResult.isFailure) {
-            val throwable = apiResult.exceptionOrNull() ?: MarketplaceError.Unexpected(Exception("Unknown API error"))
-            return Result.failure(throwable)
-        }
+    override fun listApplications(): Result<List<Application>> =
+        api.get<ApiListEnvelope<ApplicationDto>>(baseUrl(), "/applications", token(), object : TypeToken<ApiListEnvelope<ApplicationDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
 
-        val response = apiResult.getOrThrow()
-        response.error?.let {
-            return Result.failure(MarketplaceError.Api(code = it.code, apiMessage = it.message, details = it.details))
-        }
+    override fun listAssignments(): Result<List<Assignment>> =
+        api.get<ApiListEnvelope<AssignmentDto>>(baseUrl(), "/assignments", token(), object : TypeToken<ApiListEnvelope<AssignmentDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
 
-        val application = response.item?.toDomain()
-            ?: return Result.failure(MarketplaceError.Unexpected(IllegalStateException("Application payload missing")))
-        return Result.success(application)
-    }
+    override fun getAssignment(assignmentId: String): Result<Assignment> =
+        api.get<ApiItemEnvelope<AssignmentDto>>(baseUrl(), "/assignments/$assignmentId", token(), object : TypeToken<ApiItemEnvelope<AssignmentDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing assignment") }
+
+    override fun acceptAssignment(assignmentId: String): Result<Assignment> =
+        api.post<ApiItemEnvelope<AssignmentDto>>(baseUrl(), "/assignments/$assignmentId/accept", token(), null, object : TypeToken<ApiItemEnvelope<AssignmentDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing assignment") }
+
+    override fun checkIn(assignmentId: String): Result<Unit> =
+        api.post<ApiItemEnvelope<Any>>(baseUrl(), "/attendance/check-in", token(), AttendanceRequest(assignmentId), object : TypeToken<ApiItemEnvelope<Any>>() {}.type).map { }
+
+    override fun checkOut(assignmentId: String): Result<Unit> =
+        api.post<ApiItemEnvelope<Any>>(baseUrl(), "/attendance/check-out", token(), AttendanceRequest(assignmentId), object : TypeToken<ApiItemEnvelope<Any>>() {}.type).map { }
+
+    override fun createShift(input: CreateShiftRequest): Result<Shift> =
+        api.post<ApiItemEnvelope<ShiftDto>>(baseUrl(), "/shifts", token(), input, object : TypeToken<ApiItemEnvelope<ShiftDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing shift") }
+
+    override fun listBusinessShifts(): Result<List<Shift>> =
+        api.get<ApiListEnvelope<ShiftDto>>(baseUrl(), "/business/shifts", token(), object : TypeToken<ApiListEnvelope<ShiftDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
+
+    override fun listShiftApplications(shiftId: String): Result<List<Application>> =
+        api.get<ApiListEnvelope<ApplicationDto>>(baseUrl(), "/business/shifts/$shiftId/applications", token(), object : TypeToken<ApiListEnvelope<ApplicationDto>>() {}.type)
+            .map { it.items.map { dto -> dto.toDomain() } }
+
+    override fun offerAssignment(applicationId: String): Result<Assignment> =
+        api.post<ApiItemEnvelope<AssignmentDto>>(baseUrl(), "/assignments/offer", token(), OfferAssignmentRequest(applicationId), object : TypeToken<ApiItemEnvelope<AssignmentDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing assignment") }
+
+    override fun releasePayout(assignmentId: String): Result<Payout> =
+        api.post<ApiItemEnvelope<PayoutDto>>(baseUrl(), "/escrow/release/$assignmentId", token(), ReleasePayoutRequest(false), object : TypeToken<ApiItemEnvelope<PayoutDto>>() {}.type)
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing payout") }
 }

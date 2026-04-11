@@ -16,11 +16,11 @@ async function withServer(run) {
   }
 }
 
-async function createSession(base, userId, role) {
-  const res = await fetch(`${base}/api/auth/session`, {
+async function createSession(base, userId, password) {
+  const res = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ userId, role })
+    body: JSON.stringify({ userId, password })
   });
   return res.json();
 }
@@ -38,7 +38,7 @@ test('unauthorized mutation is rejected', async () => {
 
 test('authorized worker can mutate and dto keys are camelCase', async () => {
   await withServer(async (base) => {
-    const sess = await createSession(base, 'u_worker_1', 'worker');
+    const sess = await createSession(base, 'worker.demo', 'workerpass');
     const res = await fetch(`${base}/api/applications`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${sess.token}` },
@@ -53,7 +53,7 @@ test('authorized worker can mutate and dto keys are camelCase', async () => {
 
 test('service validation missing entity returns mapped status', async () => {
   await withServer(async (base) => {
-    const sess = await createSession(base, 'u_worker_1', 'worker');
+    const sess = await createSession(base, 'worker.demo', 'workerpass');
     const res = await fetch(`${base}/api/applications`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${sess.token}` },
@@ -67,8 +67,8 @@ test('service validation missing entity returns mapped status', async () => {
 
 test('rating authorization enforces participant role and duplicate prevention', async () => {
   await withServer(async (base, assignmentId) => {
-    const worker = await createSession(base, 'u_worker_1', 'worker');
-    const biz = await createSession(base, 'u_biz_1', 'business');
+    const worker = await createSession(base, 'worker.demo', 'workerpass');
+    const biz = await createSession(base, 'business.demo', 'businesspass');
 
     const invalidRole = await fetch(`${base}/api/ratings`, {
       method: 'POST',
@@ -102,7 +102,7 @@ test('rating authorization enforces participant role and duplicate prevention', 
 
 test('chat message sender identity is derived from session and cannot be spoofed', async () => {
   await withServer(async (base, assignmentId) => {
-    const worker = await createSession(base, 'u_worker_1', 'worker');
+    const worker = await createSession(base, 'worker.demo', 'workerpass');
     const res = await fetch(`${base}/api/chats/${assignmentId}/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${worker.token}` },
@@ -116,10 +116,10 @@ test('chat message sender identity is derived from session and cannot be spoofed
 
 test('sensitive reads enforce authorization', async () => {
   await withServer(async (base, assignmentId, runtime) => {
-    const worker = await createSession(base, 'u_worker_1', 'worker');
-    const biz = await createSession(base, 'u_biz_1', 'business');
-    const outsider = await createSession(base, 'u_other', 'worker');
-    const admin = await createSession(base, 'u_admin', 'admin');
+    const worker = await createSession(base, 'worker.demo', 'workerpass');
+    const biz = await createSession(base, 'business.demo', 'businesspass');
+    const outsider = await createSession(base, 'worker2.demo', 'worker2pass');
+    const admin = await createSession(base, 'admin.demo', 'adminpass');
 
     const noAuthApplications = await fetch(`${base}/api/applications`);
     assert.equal(noAuthApplications.status, 401);

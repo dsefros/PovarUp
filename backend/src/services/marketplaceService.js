@@ -14,7 +14,9 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     const payRateCents = requireNumber(input.pay_rate_cents ?? input.payRateCents, 'payRateCents', { min: 1 });
 
     if (!repo.findBusinessById(businessId)) throw error('business_not_found', 'business not found', { status: 404 });
-    if (!repo.findLocationById(locationId)) throw error('location_not_found', 'location not found', { status: 404 });
+    const location = repo.findLocationById(locationId);
+    if (!location) throw error('location_not_found', 'location not found', { status: 404 });
+    if (location.business_id !== businessId) throw error('forbidden', 'business cannot use this location', { status: 403 });
 
     const shift = {
       id: id('shift'),
