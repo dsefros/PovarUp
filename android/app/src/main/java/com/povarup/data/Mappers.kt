@@ -12,3 +12,9 @@ fun ShiftDto.toDomain(): Shift = Shift(
     payRateCents = payRateCents,
     status = status
 )
+
+fun SessionDto.toDomain(): SessionToken = SessionToken(
+    token = token,
+    userId = userId,
+    role = role
+)

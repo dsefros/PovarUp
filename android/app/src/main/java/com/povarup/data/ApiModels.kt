@@ -26,3 +26,20 @@ data class ShiftDto(
     val payRateCents: Int,
     val status: String
 )
+
+data class CreateSessionRequest(
+    val userId: String,
+    val role: String
+)
+
+data class SessionDto(
+    val token: String,
+    val userId: String,
+    val role: String
+)
+
+data class SessionToken(
+    val token: String,
+    val userId: String,
+    val role: String
+)

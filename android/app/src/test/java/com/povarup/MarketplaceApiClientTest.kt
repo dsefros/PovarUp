@@ -1,5 +1,6 @@
 package com.povarup
 
+import com.povarup.data.CreateSessionRequest
 import com.povarup.data.MarketplaceApiClient
 import com.povarup.data.MarketplaceError
 import okhttp3.mockwebserver.MockResponse
@@ -16,12 +17,47 @@ class MarketplaceApiClientTest {
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
                 .setBody("""{"items":[{"id":"shift_1","businessId":"biz_1","locationId":"loc_1","title":"Cook","startAt":"2026-04-10T10:00:00Z","endAt":"2026-04-10T14:00:00Z","payRateCents":2500,"status":"open"}]}""")
-        ) { baseUrl ->
-            val result = MarketplaceApiClient().fetchShifts(baseUrl)
+        ) { baseUrl, _ ->
+            val result = MarketplaceApiClient().fetchShifts(baseUrl, bearerToken = null)
 
             assertTrue(result.isSuccess)
             assertEquals(1, result.getOrThrow().items.size)
             assertEquals("shift_1", result.getOrThrow().items.first().id)
+        }
+    }
+
+    @Test
+    fun createSessionMapsSuccessfulResponse() {
+        testServer(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"token":"sess_123","userId":"u_worker_1","role":"worker"}""")
+        ) { baseUrl, _ ->
+            val result = MarketplaceApiClient().createSession(
+                baseUrl,
+                CreateSessionRequest(userId = "u_worker_1", role = "worker")
+            )
+
+            assertTrue(result.isSuccess)
+            assertEquals("sess_123", result.getOrThrow().item?.token)
+            assertEquals("worker", result.getOrThrow().item?.role)
+        }
+    }
+
+    @Test
+    fun fetchShiftsAttachesBearerHeaderWhenTokenProvided() {
+        testServer(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"items":[]}""")
+        ) { baseUrl, server ->
+            val result = MarketplaceApiClient().fetchShifts(baseUrl, bearerToken = "sess_abc")
+
+            assertTrue(result.isSuccess)
+            val request = server.takeRequest()
+            assertEquals("Bearer sess_abc", request.getHeader("Authorization"))
         }
     }
 
@@ -32,8 +68,8 @@ class MarketplaceApiClientTest {
                 .setResponseCode(403)
                 .setHeader("Content-Type", "application/json")
                 .setBody("""{"error":{"code":"forbidden","message":"Not allowed","details":"role mismatch"}}""")
-        ) { baseUrl ->
-            val result = MarketplaceApiClient().fetchShifts(baseUrl)
+        ) { baseUrl, _ ->
+            val result = MarketplaceApiClient().fetchShifts(baseUrl, bearerToken = null)
 
             assertTrue(result.isSuccess)
             val envelope = result.getOrThrow()
@@ -49,8 +85,8 @@ class MarketplaceApiClientTest {
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"items\":[")
-        ) { baseUrl ->
-            val result = MarketplaceApiClient().fetchShifts(baseUrl)
+        ) { baseUrl, _ ->
+            val result = MarketplaceApiClient().fetchShifts(baseUrl, bearerToken = null)
 
             assertTrue(result.isFailure)
             assertTrue(result.exceptionOrNull() is MarketplaceError.Unexpected)
@@ -59,17 +95,17 @@ class MarketplaceApiClientTest {
 
     @Test
     fun fetchShiftsReturnsNetworkFailureOnConnectionError() {
-        val result = MarketplaceApiClient().fetchShifts("http://127.0.0.1:1/api")
+        val result = MarketplaceApiClient().fetchShifts("http://127.0.0.1:1/api", bearerToken = null)
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is MarketplaceError.Network)
     }
 
-    private fun testServer(response: MockResponse, testBlock: (baseUrl: String) -> Unit) {
+    private fun testServer(response: MockResponse, testBlock: (baseUrl: String, server: MockWebServer) -> Unit) {
         MockWebServer().use { server ->
             server.enqueue(response)
             val baseUrl = server.url("/api/").toString().removeSuffix("/")
-            testBlock(baseUrl)
+            testBlock(baseUrl, server)
         }
     }
 }
