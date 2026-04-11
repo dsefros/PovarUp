@@ -27,6 +27,17 @@ data class ShiftDto(
     val status: String
 )
 
+data class CreateApplicationRequest(
+    val shiftId: String
+)
+
+data class ApplicationDto(
+    val id: String,
+    val shiftId: String,
+    val workerId: String,
+    val status: String
+)
+
 data class CreateSessionRequest(
     val userId: String,
     val role: String

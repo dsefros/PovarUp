@@ -1,6 +1,7 @@
 package com.povarup
 
 import com.povarup.data.CreateSessionRequest
+import com.povarup.data.CreateApplicationRequest
 import com.povarup.data.MarketplaceApiClient
 import com.povarup.data.MarketplaceError
 import okhttp3.mockwebserver.MockResponse
@@ -99,6 +100,30 @@ class MarketplaceApiClientTest {
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is MarketplaceError.Network)
+    }
+
+    @Test
+    fun createApplicationPostsRequestAndMapsItemEnvelope() {
+        testServer(
+            MockResponse()
+                .setResponseCode(201)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"item":{"id":"app_1","shiftId":"shift_1","workerId":"worker_1","status":"pending"}}""")
+        ) { baseUrl, server ->
+            val result = MarketplaceApiClient().createApplication(
+                baseUrl = baseUrl,
+                bearerToken = "sess_1",
+                request = CreateApplicationRequest(shiftId = "shift_1")
+            )
+
+            assertTrue(result.isSuccess)
+            assertEquals("app_1", result.getOrThrow().item?.id)
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("/api/applications", request.path)
+            assertEquals("Bearer sess_1", request.getHeader("Authorization"))
+            assertEquals("""{"shiftId":"shift_1"}""", request.body.readUtf8())
+        }
     }
 
     private fun testServer(response: MockResponse, testBlock: (baseUrl: String, server: MockWebServer) -> Unit) {

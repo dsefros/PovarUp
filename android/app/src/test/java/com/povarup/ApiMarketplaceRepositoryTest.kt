@@ -3,7 +3,9 @@ package com.povarup
 import com.povarup.data.ApiError
 import com.povarup.data.ApiItemEnvelope
 import com.povarup.data.ApiListEnvelope
+import com.povarup.data.ApplicationDto
 import com.povarup.data.ApiMarketplaceRepository
+import com.povarup.data.CreateApplicationRequest
 import com.povarup.data.CreateSessionRequest
 import com.povarup.data.MarketplaceApi
 import com.povarup.data.MarketplaceError
@@ -41,6 +43,14 @@ class ApiMarketplaceRepositoryTest {
             override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> {
                 error("Not used")
             }
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
+                error("Not used")
+            }
         }
 
         val repository = ApiMarketplaceRepository(api = api, baseUrlProvider = { "http://localhost:4000/api" })
@@ -63,6 +73,14 @@ class ApiMarketplaceRepositoryTest {
 
             override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
                 Result.success(ApiItemEnvelope(item = SessionDto(token = "sess_123", userId = request.userId, role = request.role)))
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
+                error("Not used")
+            }
         }
 
         val repository = ApiMarketplaceRepository(api = api, sessionStore = recordingStore)
@@ -83,6 +101,14 @@ class ApiMarketplaceRepositoryTest {
 
             override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
                 Result.success(ApiItemEnvelope(error = ApiError(code = "forbidden", message = "Not authorized")))
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
+                error("Not used")
+            }
         }
 
         val repository = ApiMarketplaceRepository(api = api)
@@ -100,6 +126,14 @@ class ApiMarketplaceRepositoryTest {
             )
 
             override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> {
+                error("Not used")
+            }
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
                 error("Not used")
             }
         }
@@ -120,6 +154,14 @@ class ApiMarketplaceRepositoryTest {
             override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> {
                 error("Not used")
             }
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
+                error("Not used")
+            }
         }
 
         val repository = ApiMarketplaceRepository(api = api)
@@ -137,6 +179,14 @@ class ApiMarketplaceRepositoryTest {
 
             override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
                 Result.success(ApiItemEnvelope(item = SessionDto(token = "sess_123", userId = request.userId, role = request.role)))
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
+                error("Not used")
+            }
         }
 
         val store = RecordingSessionStore()
@@ -146,6 +196,75 @@ class ApiMarketplaceRepositoryTest {
         repository.clearSession()
 
         assertNull(repository.currentSession())
+    }
+
+    @Test
+    fun applyToShiftUsesSessionTokenAndMapsResponse() {
+        val store = RecordingSessionStore().apply {
+            save(SessionToken(token = "sess_apply", userId = "u_worker_1", role = "worker"))
+        }
+        val api = object : MarketplaceApi {
+            var lastBearer: String? = null
+            var lastRequest: CreateApplicationRequest? = null
+
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> =
+                Result.success(ApiListEnvelope(items = emptyList()))
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
+                Result.success(ApiItemEnvelope(item = SessionDto(token = "sess_new", userId = request.userId, role = request.role)))
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
+                lastBearer = bearerToken
+                lastRequest = request
+                return Result.success(
+                    ApiItemEnvelope(
+                        item = ApplicationDto(
+                            id = "app_1",
+                            shiftId = request.shiftId,
+                            workerId = "worker_1",
+                            status = "pending"
+                        )
+                    )
+                )
+            }
+        }
+
+        val repository = ApiMarketplaceRepository(api = api, sessionStore = store)
+        val result = repository.applyToShift("shift_77")
+
+        assertTrue(result.isSuccess)
+        assertEquals("sess_apply", api.lastBearer)
+        assertEquals("shift_77", api.lastRequest?.shiftId)
+        assertEquals("pending", result.getOrThrow().status)
+    }
+
+    @Test
+    fun applyToShiftFailsWithoutSession() {
+        val api = object : MarketplaceApi {
+            override fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>> =
+                Result.success(ApiListEnvelope(items = emptyList()))
+
+            override fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>> =
+                Result.success(ApiItemEnvelope(item = SessionDto(token = "sess", userId = request.userId, role = request.role)))
+
+            override fun createApplication(
+                baseUrl: String,
+                bearerToken: String?,
+                request: CreateApplicationRequest
+            ): Result<ApiItemEnvelope<ApplicationDto>> {
+                error("Should not be called without session")
+            }
+        }
+
+        val repository = ApiMarketplaceRepository(api = api, sessionStore = RecordingSessionStore())
+        val result = repository.applyToShift("shift_1")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is MarketplaceError.Api)
     }
 
     private class RecordingSessionStore : SessionStore {

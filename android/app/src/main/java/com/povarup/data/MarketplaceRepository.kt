@@ -3,6 +3,7 @@ package com.povarup.data
 import com.google.gson.Gson
 import com.google.gson.JsonParseException
 import com.povarup.core.NetworkConfig
+import com.povarup.domain.Application
 import com.povarup.domain.Shift
 import java.io.BufferedReader
 import java.io.IOException
@@ -18,6 +19,7 @@ interface MarketplaceRepository {
     fun createSession(userId: String, role: String): Result<SessionToken>
     fun clearSession()
     fun listShifts(): Result<List<Shift>>
+    fun applyToShift(shiftId: String): Result<Application>
 }
 
 class InMemoryMarketplaceRepository(
@@ -47,11 +49,19 @@ class InMemoryMarketplaceRepository(
     }
 
     override fun listShifts(): Result<List<Shift>> = Result.success(emptyList())
+
+    override fun applyToShift(shiftId: String): Result<Application> =
+        Result.failure(MarketplaceError.Unexpected(UnsupportedOperationException("In-memory apply flow not implemented")))
 }
 
 interface MarketplaceApi {
     fun fetchShifts(baseUrl: String, bearerToken: String?): Result<ApiListEnvelope<ShiftDto>>
     fun createSession(baseUrl: String, request: CreateSessionRequest): Result<ApiItemEnvelope<SessionDto>>
+    fun createApplication(
+        baseUrl: String,
+        bearerToken: String?,
+        request: CreateApplicationRequest
+    ): Result<ApiItemEnvelope<ApplicationDto>>
 }
 
 class MarketplaceApiClient(private val gson: Gson = Gson()) : MarketplaceApi {
@@ -87,6 +97,39 @@ class MarketplaceApiClient(private val gson: Gson = Gson()) : MarketplaceApi {
             val body = readResponseBody(connection, code)
             if (code in 200..299) {
                 ApiItemEnvelope(item = gson.fromJson(body.orEmpty(), SessionDto::class.java))
+            } else {
+                ApiItemEnvelope(error = parseApiError(body, code))
+            }
+        } catch (ioe: IOException) {
+            throw MarketplaceError.Network(ioe)
+        } catch (jsonError: JsonParseException) {
+            throw MarketplaceError.Unexpected(jsonError)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    override fun createApplication(
+        baseUrl: String,
+        bearerToken: String?,
+        request: CreateApplicationRequest
+    ): Result<ApiItemEnvelope<ApplicationDto>> = runCatching {
+        val endpoint = "${baseUrl}/applications"
+        val payload = gson.toJson(request)
+        val connection = buildConnection(
+            endpoint = endpoint,
+            method = "POST",
+            bearerToken = bearerToken,
+            requestBody = payload
+        )
+
+        try {
+            writeRequestBody(connection, payload)
+
+            val code = connection.responseCode
+            val body = readResponseBody(connection, code)
+            if (code in 200..299) {
+                ApiItemEnvelope(item = gson.fromJson(body.orEmpty(), ApplicationItemResponse::class.java).item)
             } else {
                 ApiItemEnvelope(error = parseApiError(body, code))
             }
@@ -151,6 +194,7 @@ class MarketplaceApiClient(private val gson: Gson = Gson()) : MarketplaceApi {
     }
 
     private data class ErrorResponse(val error: ApiError? = null)
+    private data class ApplicationItemResponse(val item: ApplicationDto? = null)
 }
 
 class ApiMarketplaceRepository(
@@ -207,5 +251,28 @@ class ApiMarketplaceRepository(
         }
 
         return Result.success(response.items.map { it.toDomain() })
+    }
+
+    override fun applyToShift(shiftId: String): Result<Application> {
+        val token = currentSession()?.token
+            ?: return Result.failure(MarketplaceError.Api(code = "unauthorized", apiMessage = "Create a session first"))
+        val apiResult = api.createApplication(
+            baseUrl = baseUrl(),
+            bearerToken = token,
+            request = CreateApplicationRequest(shiftId = shiftId)
+        )
+        if (apiResult.isFailure) {
+            val throwable = apiResult.exceptionOrNull() ?: MarketplaceError.Unexpected(Exception("Unknown API error"))
+            return Result.failure(throwable)
+        }
+
+        val response = apiResult.getOrThrow()
+        response.error?.let {
+            return Result.failure(MarketplaceError.Api(code = it.code, apiMessage = it.message, details = it.details))
+        }
+
+        val application = response.item?.toDomain()
+            ?: return Result.failure(MarketplaceError.Unexpected(IllegalStateException("Application payload missing")))
+        return Result.success(application)
     }
 }
