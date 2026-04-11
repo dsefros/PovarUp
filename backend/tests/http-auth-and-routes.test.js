@@ -159,6 +159,17 @@ test('sensitive reads enforce authorization', async () => {
     });
     assert.equal(outsiderPayouts.status, 403);
 
+    const workerMePayouts = await fetch(`${base}/api/me/payouts`, {
+      headers: { authorization: `Bearer ${worker.token}` }
+    });
+    assert.equal(workerMePayouts.status, 200);
+
+    const businessMePayouts = await fetch(`${base}/api/me/payouts`, {
+      headers: { authorization: `Bearer ${biz.token}` }
+    });
+    assert.equal(businessMePayouts.status, 403);
+
+
     const noAuthContacts = await fetch(`${base}/api/contacts/reveal/${assignmentId}`);
     assert.equal(noAuthContacts.status, 401);
 

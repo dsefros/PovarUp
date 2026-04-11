@@ -1,6 +1,7 @@
 package com.povarup
 
 import com.povarup.core.AppDispatchers
+import com.povarup.core.DashboardLoadState
 import com.povarup.core.MainViewModel
 import com.povarup.data.CreateShiftRequest
 import com.povarup.data.MarketplaceRepository
@@ -50,6 +51,7 @@ class MainViewModelTest {
             advanceUntilIdle()
 
             assertTrue(vm.uiState.value.errorMessage?.contains("dashboard shifts failed") == true)
+            assertEquals(DashboardLoadState.ERROR, vm.uiState.value.dashboardState)
         } finally { Dispatchers.resetMain() }
     }
 
@@ -72,6 +74,131 @@ class MainViewModelTest {
         } finally { Dispatchers.resetMain() }
     }
 
+    @Test
+    fun duplicateApplyActionIsIgnoredWhileRequestInFlight() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repo = FakeRepo()
+            val vm = MainViewModel(repo, AppDispatchers(io = dispatcher))
+
+            vm.applyToShift("shift_new")
+            vm.applyToShift("shift_new")
+            advanceUntilIdle()
+
+            assertEquals(1, repo.applyCalls)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun workerDashboardLoadsPayoutsAndImportantEvents() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repo = FakeRepo().apply {
+                role = "worker"
+                session = SessionToken("sess", "worker.demo", "worker")
+            }
+            val vm = MainViewModel(repo, AppDispatchers(io = dispatcher))
+            vm.loadDashboard()
+            advanceUntilIdle()
+
+            assertEquals(1, repo.listPayoutCalls)
+            assertTrue(vm.uiState.value.importantEvents.any { it.contains("asn_1") })
+            assertTrue(vm.uiState.value.payouts.any { it.status == "created" })
+        } finally { Dispatchers.resetMain() }
+    }
+
+
+    @Test
+    fun payoutFailureIsSurfacedOnDashboardLoad() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repo = FakeRepo().apply {
+                role = "worker"
+                session = SessionToken("sess", "worker.demo", "worker")
+                payoutsFailure = IllegalStateException("payouts unavailable")
+            }
+            val vm = MainViewModel(repo, AppDispatchers(io = dispatcher))
+            vm.loadDashboard()
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.errorMessage?.contains("payouts unavailable") == true)
+            assertEquals(DashboardLoadState.ERROR, vm.uiState.value.dashboardState)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun roleGatingPreventsInvalidActionsWithoutRepositoryCalls() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val businessRepo = FakeRepo().apply {
+                role = "business"
+                session = SessionToken("sess", "business.demo", "business")
+            }
+            val businessVm = MainViewModel(businessRepo, AppDispatchers(io = dispatcher))
+            businessVm.applyToShift("shift_w")
+            advanceUntilIdle()
+            assertEquals(0, businessRepo.applyCalls)
+            assertTrue(businessVm.uiState.value.errorMessage?.contains("Only workers") == true)
+
+            val workerRepo = FakeRepo().apply {
+                role = "worker"
+                session = SessionToken("sess", "worker.demo", "worker")
+            }
+            val workerVm = MainViewModel(workerRepo, AppDispatchers(io = dispatcher))
+            workerVm.createShift("Prep", "loc_1", 1200)
+            advanceUntilIdle()
+            assertEquals(0, workerRepo.createShiftCalls)
+            assertTrue(workerVm.uiState.value.errorMessage?.contains("Only businesses") == true)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun applyIsBlockedWhenWorkerAlreadyRelatedToShift() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repo = FakeRepo().apply {
+                role = "worker"
+                session = SessionToken("sess", "worker.demo", "worker")
+            }
+            val vm = MainViewModel(repo, AppDispatchers(io = dispatcher))
+            vm.loadDashboard()
+            advanceUntilIdle()
+
+            vm.applyToShift("shift_w")
+            advanceUntilIdle()
+
+            assertEquals(0, repo.applyCalls)
+            assertTrue(vm.uiState.value.errorMessage?.contains("already applied") == true)
+        } finally { Dispatchers.resetMain() }
+    }
+
+    @Test
+    fun checkoutIsBlockedWhenAssignmentAlreadyCompleted() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val repo = FakeRepo().apply {
+                role = "worker"
+                session = SessionToken("sess", "worker.demo", "worker")
+                assignmentStatus = "completed_pending_rating"
+            }
+            val vm = MainViewModel(repo, AppDispatchers(io = dispatcher))
+            vm.loadDashboard()
+            advanceUntilIdle()
+
+            vm.checkOut("asn_1")
+            advanceUntilIdle()
+
+            assertEquals(0, repo.checkOutCalls)
+            assertTrue(vm.uiState.value.errorMessage?.contains("in-progress") == true)
+        } finally { Dispatchers.resetMain() }
+    }
+
     private class FakeRepo : MarketplaceRepository {
         var role: String = "worker"
         var session: SessionToken? = null
@@ -79,6 +206,12 @@ class MainViewModelTest {
         var shiftsFailure: Throwable? = null
         var businessShiftCalls = 0
         var shiftApplicationsCalls = 0
+        var applyCalls = 0
+        var createShiftCalls = 0
+        var checkOutCalls = 0
+        var listPayoutCalls = 0
+        var payoutsFailure: Throwable? = null
+        var assignmentStatus: String = "offered"
 
         override fun currentRole(): String = role
         override fun setRole(role: String) { this.role = role }
@@ -87,16 +220,30 @@ class MainViewModelTest {
         override fun login(userId: String, password: String): Result<SessionToken> = Result.success(SessionToken("sess", userId, role).also { session = it })
         override fun clearSession() { session = null }
 
-        override fun listShifts(): Result<List<Shift>> = shiftsFailure?.let { Result.failure(it) } ?: Result.success(listOf(Shift("shift_w", "biz", "loc", "Worker shift", "", "", 1000, "open")))
+        override fun listShifts(): Result<List<Shift>> = shiftsFailure?.let { Result.failure(it) } ?: Result.success(
+            listOf(
+                Shift("shift_w", "biz", "loc", "Worker shift", "2030-01-01T10:00:00Z", "2030-01-01T14:00:00Z", 1000, "open"),
+                Shift("shift_new", "biz", "loc", "Second shift", "2030-01-02T10:00:00Z", "2030-01-02T14:00:00Z", 1000, "open")
+            )
+        )
         override fun getShift(shiftId: String): Result<Shift> = Result.success(listShifts().getOrThrow().first())
-        override fun applyToShift(shiftId: String): Result<Application> = applyFailure?.let { Result.failure(it) } ?: Result.success(Application("app", shiftId, "worker", "applied"))
-        override fun listApplications(): Result<List<Application>> = Result.success(listOf(Application("app_worker_1", "shift_w", "worker", "applied")))
-        override fun listAssignments(): Result<List<Assignment>> = Result.success(emptyList())
+        override fun applyToShift(shiftId: String): Result<Application> {
+            applyCalls += 1
+            return applyFailure?.let { Result.failure(it) } ?: Result.success(Application("app", shiftId, "worker_1", "applied"))
+        }
+        override fun listApplications(): Result<List<Application>> = Result.success(listOf(Application("app_worker_1", "shift_w", "worker_1", "applied")))
+        override fun listAssignments(): Result<List<Assignment>> = Result.success(listOf(Assignment("asn_1", "shift_w", "worker_1", "biz", assignmentStatus, 1000)))
         override fun getAssignment(assignmentId: String): Result<Assignment> = Result.failure(Exception())
         override fun acceptAssignment(assignmentId: String): Result<Assignment> = Result.failure(Exception())
         override fun checkIn(assignmentId: String): Result<Unit> = Result.success(Unit)
-        override fun checkOut(assignmentId: String): Result<Unit> = Result.success(Unit)
-        override fun createShift(input: CreateShiftRequest): Result<Shift> = Result.success(Shift("shift_new", "biz", input.locationId, input.title, input.startAt, input.endAt, input.payRateCents, "open"))
+        override fun checkOut(assignmentId: String): Result<Unit> {
+            checkOutCalls += 1
+            return Result.success(Unit)
+        }
+        override fun createShift(input: CreateShiftRequest): Result<Shift> {
+            createShiftCalls += 1
+            return Result.success(Shift("shift_new", "biz", input.locationId, input.title, input.startAt, input.endAt, input.payRateCents, "open"))
+        }
         override fun listBusinessShifts(): Result<List<Shift>> {
             businessShiftCalls += 1
             return shiftsFailure?.let { Result.failure(it) }
@@ -110,5 +257,10 @@ class MainViewModelTest {
 
         override fun offerAssignment(applicationId: String): Result<Assignment> = Result.failure(Exception())
         override fun releasePayout(assignmentId: String): Result<Payout> = Result.failure(Exception())
+        override fun listMyPayouts(): Result<List<Payout>> {
+            listPayoutCalls += 1
+            return payoutsFailure?.let { Result.failure(it) }
+                ?: Result.success(listOf(Payout("pay_1", "asn_1", "worker_1", 1000, "created")))
+        }
     }
 }

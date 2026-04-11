@@ -216,6 +216,13 @@ function createApp({ repo, seed, service }) {
       return send(res, 201, { item: payoutDto(service.releasePayment(assignmentId, b.force === true)) });
     }
 
+
+    if (path === '/api/me/payouts' && method === 'GET') {
+      const actor = actorFromSession(requireAuth(req, repo), repo);
+      if (!actor.worker) throw error('forbidden', 'Payout access denied', { status: 403 });
+      return send(res, 200, { items: repo.listPayoutsByWorkerId(actor.worker.id).map(payoutDto) });
+    }
+
     if (path.match(/^\/api\/payouts\//) && method === 'GET') {
       const actor = actorFromSession(requireAuth(req, repo), repo);
       const workerId = path.split('/')[3];

@@ -209,6 +209,13 @@ paths:
     post:
       parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
       responses: { '201': { description: released } }
+  /me/payouts:
+    get:
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: payouts for authenticated worker }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /payouts/{workerId}:
     get:
       parameters: [{ name: workerId, in: path, required: true, schema: { type: string } }]
