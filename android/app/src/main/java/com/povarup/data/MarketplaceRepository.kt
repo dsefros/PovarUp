@@ -26,6 +26,8 @@ interface MarketplaceRepository {
     fun getShift(shiftId: String): Result<Shift>
     fun applyToShift(shiftId: String): Result<Application>
     fun listApplications(): Result<List<Application>>
+    fun withdrawApplication(applicationId: String): Result<Application>
+    fun rejectApplication(applicationId: String): Result<Application>
     fun listAssignments(): Result<List<Assignment>>
     fun getAssignment(assignmentId: String): Result<Assignment>
     fun acceptAssignment(assignmentId: String): Result<Assignment>
@@ -35,6 +37,10 @@ interface MarketplaceRepository {
     fun listBusinessShifts(): Result<List<Shift>>
     fun listShiftApplications(shiftId: String): Result<List<Application>>
     fun offerAssignment(applicationId: String): Result<Assignment>
+    fun publishShift(shiftId: String): Result<Shift>
+    fun closeShift(shiftId: String): Result<Shift>
+    fun cancelShift(shiftId: String): Result<Shift>
+    fun cancelAssignment(assignmentId: String): Result<Assignment>
     fun releasePayout(assignmentId: String): Result<Payout>
     fun listMyPayouts(): Result<List<Payout>>
     fun listAdminAssignments(): Result<List<Assignment>>
@@ -79,7 +85,12 @@ class MarketplaceApiClient(private val gson: Gson = Gson()) : MarketplaceApi {
             if (payload != null) connection.outputStream.use { it.write(payload.toByteArray()) }
             val code = connection.responseCode
             val body = readResponseBody(connection, code)
-            if (code !in 200..299) throw MarketplaceError.Api(code = "http_error", apiMessage = body ?: "HTTP $code")
+            if (code !in 200..299) {
+                val parsedMessage = runCatching {
+                    gson.fromJson(body.orEmpty(), ApiItemEnvelope::class.java)?.error?.message
+                }.getOrNull()
+                throw MarketplaceError.Api(code = "http_error", apiMessage = parsedMessage ?: body ?: "HTTP $code")
+            }
             gson.fromJson(body.orEmpty(), type)
         } catch (ioe: IOException) {
             throw MarketplaceError.Network(ioe)
@@ -103,6 +114,12 @@ class ApiMarketplaceRepository(
 ) : MarketplaceRepository {
     private var role: String = sessionStore.load()?.role ?: "worker"
     private fun token(): String? = currentSession()?.token
+    private fun <T> withRetry(block: () -> Result<T>): Result<T> {
+        val first = block()
+        if (first.isSuccess) return first
+        val err = first.exceptionOrNull()
+        return if (err is MarketplaceError.Network) block() else first
+    }
 
     override fun currentRole(): String = role
     override fun setRole(role: String) { this.role = role }
@@ -130,12 +147,20 @@ class ApiMarketplaceRepository(
             .map { it.item?.toDomain() ?: throw IllegalStateException("Missing shift") }
 
     override fun applyToShift(shiftId: String): Result<Application> =
-        api.post<ApiItemEnvelope<ApplicationDto>>(baseUrl(), "/applications", token(), CreateApplicationRequest(shiftId), object : TypeToken<ApiItemEnvelope<ApplicationDto>>() {}.type)
+        withRetry { api.post<ApiItemEnvelope<ApplicationDto>>(baseUrl(), "/applications", token(), CreateApplicationRequest(shiftId), object : TypeToken<ApiItemEnvelope<ApplicationDto>>() {}.type) }
             .map { it.item?.toDomain() ?: throw IllegalStateException("Missing application") }
 
     override fun listApplications(): Result<List<Application>> =
         api.get<ApiListEnvelope<ApplicationDto>>(baseUrl(), "/applications", token(), object : TypeToken<ApiListEnvelope<ApplicationDto>>() {}.type)
             .map { it.items.map { dto -> dto.toDomain() } }
+
+    override fun withdrawApplication(applicationId: String): Result<Application> =
+        withRetry { api.post<ApiItemEnvelope<ApplicationDto>>(baseUrl(), "/applications/$applicationId/withdraw", token(), null, object : TypeToken<ApiItemEnvelope<ApplicationDto>>() {}.type) }
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing application") }
+
+    override fun rejectApplication(applicationId: String): Result<Application> =
+        withRetry { api.post<ApiItemEnvelope<ApplicationDto>>(baseUrl(), "/applications/$applicationId/reject", token(), null, object : TypeToken<ApiItemEnvelope<ApplicationDto>>() {}.type) }
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing application") }
 
     override fun listAssignments(): Result<List<Assignment>> =
         api.get<ApiListEnvelope<AssignmentDto>>(baseUrl(), "/assignments", token(), object : TypeToken<ApiListEnvelope<AssignmentDto>>() {}.type)
@@ -168,7 +193,23 @@ class ApiMarketplaceRepository(
             .map { it.items.map { dto -> dto.toDomain() } }
 
     override fun offerAssignment(applicationId: String): Result<Assignment> =
-        api.post<ApiItemEnvelope<AssignmentDto>>(baseUrl(), "/assignments/offer", token(), OfferAssignmentRequest(applicationId), object : TypeToken<ApiItemEnvelope<AssignmentDto>>() {}.type)
+        withRetry { api.post<ApiItemEnvelope<AssignmentDto>>(baseUrl(), "/assignments/offer", token(), OfferAssignmentRequest(applicationId), object : TypeToken<ApiItemEnvelope<AssignmentDto>>() {}.type) }
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing assignment") }
+
+    override fun publishShift(shiftId: String): Result<Shift> =
+        withRetry { api.post<ApiItemEnvelope<ShiftDto>>(baseUrl(), "/shifts/$shiftId/publish", token(), null, object : TypeToken<ApiItemEnvelope<ShiftDto>>() {}.type) }
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing shift") }
+
+    override fun closeShift(shiftId: String): Result<Shift> =
+        withRetry { api.post<ApiItemEnvelope<ShiftDto>>(baseUrl(), "/shifts/$shiftId/close", token(), null, object : TypeToken<ApiItemEnvelope<ShiftDto>>() {}.type) }
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing shift") }
+
+    override fun cancelShift(shiftId: String): Result<Shift> =
+        withRetry { api.post<ApiItemEnvelope<ShiftDto>>(baseUrl(), "/shifts/$shiftId/cancel", token(), null, object : TypeToken<ApiItemEnvelope<ShiftDto>>() {}.type) }
+            .map { it.item?.toDomain() ?: throw IllegalStateException("Missing shift") }
+
+    override fun cancelAssignment(assignmentId: String): Result<Assignment> =
+        withRetry { api.post<ApiItemEnvelope<AssignmentDto>>(baseUrl(), "/assignments/$assignmentId/cancel", token(), null, object : TypeToken<ApiItemEnvelope<AssignmentDto>>() {}.type) }
             .map { it.item?.toDomain() ?: throw IllegalStateException("Missing assignment") }
 
     override fun releasePayout(assignmentId: String): Result<Payout> =

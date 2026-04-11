@@ -42,8 +42,8 @@ test('duplicate apply is blocked and statuses include normalizedStatus', async (
 
     const apps = await fetch(`${base}/api/applications`, { headers: { authorization: `Bearer ${worker.token}` } });
     const body = await apps.json();
-    assert.equal(body.items[0].normalizedStatus, 'submitted');
-    assert.equal(body.items[0].productStatus, 'submitted');
+    assert.equal(body.items[0].normalizedStatus, 'applied');
+    assert.equal(body.items[0].productStatus, 'applied');
   });
 });
 

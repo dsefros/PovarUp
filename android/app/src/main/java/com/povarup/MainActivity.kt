@@ -44,11 +44,16 @@ class MainActivity : AppCompatActivity() {
 
         val refresh = Button(this).apply { text = "Retry / Refresh" }
         val apply = Button(this).apply { text = "Apply" }
-        val accept = Button(this).apply { text = "Accept Offer" }
         val checkIn = Button(this).apply { text = "Check In" }
         val checkOut = Button(this).apply { text = "Check Out" }
         val createShift = Button(this).apply { text = "Create Shift" }
+        val publishShift = Button(this).apply { text = "Publish Shift" }
         val offer = Button(this).apply { text = "Offer Assignment" }
+        val reject = Button(this).apply { text = "Reject Application" }
+        val withdraw = Button(this).apply { text = "Withdraw Application" }
+        val closeShift = Button(this).apply { text = "Close Shift" }
+        val cancelShift = Button(this).apply { text = "Cancel Shift" }
+        val cancelAssignment = Button(this).apply { text = "Cancel Assignment" }
         val release = Button(this).apply { text = "Release Payout" }
         val clear = Button(this).apply { text = "Clear Session" }
         val logout = Button(this).apply { text = "Logout" }
@@ -100,7 +105,6 @@ class MainActivity : AppCompatActivity() {
                 addView(shiftId)
                 addView(apply)
                 addView(assignmentId)
-                addView(accept)
                 addView(checkIn)
                 addView(checkOut)
 
@@ -109,8 +113,14 @@ class MainActivity : AppCompatActivity() {
                 addView(locationId)
                 addView(payRate)
                 addView(createShift)
+                addView(publishShift)
                 addView(appId)
                 addView(offer)
+                addView(reject)
+                addView(withdraw)
+                addView(closeShift)
+                addView(cancelShift)
+                addView(cancelAssignment)
                 addView(release)
 
                 addView(sectionTitle("Important events"))
@@ -158,11 +168,16 @@ class MainActivity : AppCompatActivity() {
         logout.setOnClickListener { viewModel.logout() }
         refresh.setOnClickListener { viewModel.setSelectedShift(shiftId.text.toString()); viewModel.loadDashboard() }
         apply.setOnClickListener { viewModel.applyToShift(shiftId.text.toString()) }
-        accept.setOnClickListener { viewModel.acceptAssignment(assignmentId.text.toString()) }
         checkIn.setOnClickListener { viewModel.checkIn(assignmentId.text.toString()) }
         checkOut.setOnClickListener { viewModel.checkOut(assignmentId.text.toString()) }
         createShift.setOnClickListener { viewModel.createShift(shiftTitle.text.toString(), locationId.text.toString(), payRate.text.toString().toIntOrNull() ?: 2200) }
+        publishShift.setOnClickListener { viewModel.publishShift(shiftId.text.toString()) }
         offer.setOnClickListener { viewModel.offerAssignment(appId.text.toString()) }
+        reject.setOnClickListener { viewModel.rejectApplication(appId.text.toString()) }
+        withdraw.setOnClickListener { viewModel.withdrawApplication(appId.text.toString()) }
+        closeShift.setOnClickListener { viewModel.closeShift(shiftId.text.toString()) }
+        cancelShift.setOnClickListener { viewModel.cancelShift(shiftId.text.toString()) }
+        cancelAssignment.setOnClickListener { viewModel.cancelAssignment(assignmentId.text.toString()) }
         release.setOnClickListener { viewModel.releasePayout(assignmentId.text.toString()) }
         adminToPending.setOnClickListener { viewModel.progressAdminPayout(adminPayoutId.text.toString(), "pending") }
         adminToPaid.setOnClickListener { viewModel.progressAdminPayout(adminPayoutId.text.toString(), "paid") }
@@ -183,17 +198,23 @@ class MainActivity : AppCompatActivity() {
                     val isAdmin = state.role == "admin"
                     val selectedAssignment = state.assignments.firstOrNull { it.id == assignmentId.text.toString() }
                     val selectedShift = state.shifts.firstOrNull { it.id == shiftId.text.toString() }
+                    val selectedApplication = state.applications.firstOrNull { it.id == appId.text.toString() }
                     val relatedShiftIds = (state.applications.map { it.shiftId } + state.assignments.map { it.shiftId }).toSet()
 
                     refresh.isEnabled = !disableDashboardActions
                     login.isEnabled = !viewModel.isActionInFlight("login")
-                    apply.isEnabled = isWorker && !viewModel.isActionInFlight("apply:${shiftId.text.toString()}") && selectedShift?.productStatus == "open" && !relatedShiftIds.contains(shiftId.text.toString())
-                    accept.isEnabled = isWorker && selectedAssignment?.productStatus == "offered" && !viewModel.isActionInFlight("accept:${assignmentId.text.toString()}")
-                    checkIn.isEnabled = isWorker && selectedAssignment?.productStatus == "active" && !viewModel.isActionInFlight("checkin:${assignmentId.text.toString()}")
-                    checkOut.isEnabled = isWorker && selectedAssignment?.productStatus == "checked_in" && !viewModel.isActionInFlight("checkout:${assignmentId.text.toString()}")
+                    apply.isEnabled = isWorker && !viewModel.isActionInFlight("apply:${shiftId.text.toString()}") && selectedShift?.productStatus == "published" && !relatedShiftIds.contains(shiftId.text.toString())
+                    checkIn.isEnabled = isWorker && selectedAssignment?.productStatus == "assigned" && !viewModel.isActionInFlight("checkin:${assignmentId.text.toString()}")
+                    checkOut.isEnabled = isWorker && selectedAssignment?.productStatus == "in_progress" && !viewModel.isActionInFlight("checkout:${assignmentId.text.toString()}")
                     createShift.isEnabled = isBusiness && !viewModel.isActionInFlight("create_shift")
+                    publishShift.isEnabled = isBusiness && selectedShift?.productStatus == "draft" && !viewModel.isActionInFlight("publish_shift:${shiftId.text.toString()}")
                     offer.isEnabled = isBusiness && appId.text.isNotBlank() && !viewModel.isActionInFlight("offer:${appId.text.toString()}")
-                    release.isEnabled = isBusiness && selectedAssignment?.productStatus in setOf("checked_out", "completed") && !viewModel.isActionInFlight("release:${assignmentId.text.toString()}")
+                    reject.isEnabled = isBusiness && selectedApplication?.productStatus == "applied" && !viewModel.isActionInFlight("reject:${appId.text.toString()}")
+                    withdraw.isEnabled = isWorker && selectedApplication?.productStatus in setOf("applied", "accepted") && !viewModel.isActionInFlight("withdraw:${appId.text.toString()}")
+                    closeShift.isEnabled = isBusiness && selectedShift?.productStatus == "published" && !viewModel.isActionInFlight("close_shift:${shiftId.text.toString()}")
+                    cancelShift.isEnabled = isBusiness && selectedShift?.productStatus in setOf("draft", "published", "closed") && !viewModel.isActionInFlight("cancel_shift:${shiftId.text.toString()}")
+                    cancelAssignment.isEnabled = isBusiness && selectedAssignment?.productStatus in setOf("assigned", "in_progress") && !viewModel.isActionInFlight("cancel_assignment:${assignmentId.text.toString()}")
+                    release.isEnabled = isBusiness && selectedAssignment?.productStatus == "completed" && !viewModel.isActionInFlight("release:${assignmentId.text.toString()}")
                     adminToPending.isEnabled = isAdmin && adminPayoutId.text.isNotBlank()
                     adminToPaid.isEnabled = isAdmin && adminPayoutId.text.isNotBlank()
                     adminToFailed.isEnabled = isAdmin && adminPayoutId.text.isNotBlank()
@@ -223,7 +244,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         val appliedShiftIds = state.applications.map { it.shiftId }.toSet()
         val assignedShiftIds = state.assignments.map { it.shiftId }.toSet()
-        val availableShifts = state.shifts.filter { it.productStatus == "open" && !appliedShiftIds.contains(it.id) && !assignedShiftIds.contains(it.id) }
+        val availableShifts = state.shifts.filter { it.productStatus == "published" && !appliedShiftIds.contains(it.id) && !assignedShiftIds.contains(it.id) }
         availableShiftsBlock.text = if (state.role != "worker") "Sign in as a worker to view this section."
         else if (availableShifts.isEmpty()) "No available shifts right now."
         else availableShifts.joinToString("\n") { "• ${it.title} (${it.id}) @ ${it.startAt}" }
@@ -237,7 +258,7 @@ class MainActivity : AppCompatActivity() {
         else state.assignments.joinToString("\n") { "• ${it.id}: shift=${it.shiftId} status=${it.productStatus}" }
 
         val shiftById = state.shifts.associateBy { it.id }
-        val activeAssignment = state.assignments.firstOrNull { it.productStatus == "active" || it.productStatus == "checked_in" }
+        val activeAssignment = state.assignments.firstOrNull { it.productStatus == "assigned" || it.productStatus == "in_progress" }
         activeShiftBlock.text = when {
             state.role != "worker" -> "Sign in as a worker to view this section."
             activeAssignment == null -> "No active shift."
@@ -247,7 +268,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val completedAssignments = state.assignments.filter { it.productStatus in setOf("checked_out", "completed", "paid") }
+        val completedAssignments = state.assignments.filter { it.productStatus in setOf("completed", "paid", "cancelled") }
         completedBlock.text = if (state.role != "worker") "Sign in as a worker to view this section."
         else if (completedAssignments.isEmpty()) "No completed shifts yet."
         else completedAssignments.joinToString("\n") { assignment ->
@@ -280,7 +301,7 @@ class MainActivity : AppCompatActivity() {
         else if (state.assignments.isEmpty()) "No assignments yet."
         else state.assignments.joinToString("\n") { "• ${it.id}: worker=${it.workerId} status=${it.productStatus}" }
 
-        val releaseReady = state.assignments.filter { it.productStatus in setOf("checked_out", "completed") }
+        val releaseReady = state.assignments.filter { it.productStatus == "completed" }
         businessPayoutBlock.text = when {
             state.role != "business" -> "Sign in as a business user to view this section."
             releaseReady.isEmpty() -> "No completed assignments ready for payout release."

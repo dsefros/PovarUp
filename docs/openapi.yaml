@@ -41,8 +41,8 @@ components:
         endAt: { type: string, format: date-time }
         payRateCents: { type: integer }
         status: { type: string }
-        normalizedStatus: { type: string, enum: [open, filled, closed, cancelled] }
-        productStatus: { type: string, enum: [open, filled, closed, cancelled] }
+        normalizedStatus: { type: string, enum: [draft, published, filled, closed, cancelled] }
+        productStatus: { type: string, enum: [draft, published, filled, closed, cancelled] }
     Application:
       type: object
       properties:
@@ -50,8 +50,8 @@ components:
         shiftId: { type: string }
         workerId: { type: string }
         status: { type: string }
-        normalizedStatus: { type: string, enum: [submitted, offered, rejected, withdrawn] }
-        productStatus: { type: string, enum: [submitted, offered, rejected, withdrawn] }
+        normalizedStatus: { type: string, enum: [applied, accepted, rejected, withdrawn] }
+        productStatus: { type: string, enum: [applied, accepted, rejected, withdrawn] }
     Assignment:
       type: object
       properties:
@@ -60,8 +60,8 @@ components:
         workerId: { type: string }
         businessId: { type: string }
         status: { type: string }
-        normalizedStatus: { type: string, enum: [offered, active, checked_in, checked_out, completed, paid, cancelled] }
-        productStatus: { type: string, enum: [offered, active, checked_in, checked_out, completed, paid, cancelled] }
+        normalizedStatus: { type: string, enum: [assigned, in_progress, completed, paid, cancelled] }
+        productStatus: { type: string, enum: [assigned, in_progress, completed, paid, cancelled] }
         escrowLockedCents: { type: integer }
     Payout:
       type: object
@@ -85,6 +85,11 @@ components:
         createdAt: { type: string, format: date-time }
         violationDetected: { type: boolean }
 paths:
+  # Lifecycle model:
+  # Shift: draft -> published -> closed -> cancelled
+  # Application: applied -> accepted -> rejected -> withdrawn (branching allowed by service guards)
+  # Assignment: assigned -> in_progress -> completed (cancel allowed only from assigned/in_progress)
+  # Payout: created -> pending -> paid -> failed
   /health:
     get:
       responses: { '200': { description: ok } }
@@ -140,6 +145,21 @@ paths:
     get:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
       responses: { '200': { description: shift detail } }
+  /shifts/{id}/publish:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: transition shift to published } }
+  /shifts/{id}/close:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: transition shift to closed } }
+  /shifts/{id}/cancel:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: transition shift to cancelled } }
   /business/shifts:
     get:
       security: [{ BearerAuth: [] }]
@@ -189,8 +209,26 @@ paths:
       responses: { '201': { description: offered } }
   /assignments/{id}/accept:
     post:
+      deprecated: true
+      description: Compatibility no-op endpoint. Returns current assignment for authorized participants/admin.
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      responses: { '200': { description: accepted } }
+      responses: { '200': { description: compatibility no-op response } }
+  /applications/{id}/reject:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: transition application to rejected } }
+  /applications/{id}/withdraw:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: transition application to withdrawn } }
+  /assignments/{id}/cancel:
+    post:
+      description: Cancel assignment only when current status is assigned or in_progress.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      security: [{ BearerAuth: [] }]
+      responses: { '200': { description: transition assignment to cancelled } }
   /attendance/check-in:
     post: { responses: { '201': { description: check-in } } }
   /attendance/check-out:
@@ -229,6 +267,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
   /escrow/release/{assignmentId}:
     post:
+      description: Creates payout only for completed (non-cancelled) assignments.
       parameters: [{ name: assignmentId, in: path, required: true, schema: { type: string } }]
       responses: { '201': { description: released } }
   /me/payouts:

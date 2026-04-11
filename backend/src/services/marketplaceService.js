@@ -5,6 +5,26 @@ const { error } = require('../domain/errors');
 const { requireNumber, requireOneOf, requireString } = require('../domain/validation');
 
 function createMarketplaceService(repo = createMarketplaceRepository()) {
+  const transitions = {
+    shift: { draft: ['published', 'cancelled'], published: ['closed', 'cancelled'], closed: ['cancelled'], cancelled: [] },
+    application: { applied: ['accepted', 'rejected', 'withdrawn'], accepted: ['withdrawn'], rejected: [], withdrawn: [] },
+    assignment: { assigned: ['in_progress', 'cancelled'], in_progress: ['completed', 'cancelled'], completed: [], cancelled: [] },
+    payout: { created: ['pending', 'failed'], pending: ['paid', 'failed'], paid: [], failed: ['pending'] }
+  };
+
+  function logTransition(entity, idValue, from, to, actor = 'system') {
+    // lightweight structured logging
+    console.log(JSON.stringify({ event: 'lifecycle_transition', entity, id: idValue, from, to, actor, at: nowIso() }));
+  }
+
+  function assertTransition(entity, current, next) {
+    if (current === next) return true;
+    if (!transitions[entity]?.[current]?.includes(next)) {
+      throw error('invalid_transition', `invalid ${entity} transition: ${current} -> ${next}`, { status: 409 });
+    }
+    return false;
+  }
+
   function createShift(input) {
     const businessId = requireString(input.business_id || input.businessId, 'businessId');
     const locationId = requireString(input.location_id || input.locationId, 'locationId');
@@ -26,11 +46,23 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
       start_at: input.start_at || input.startAt,
       end_at: input.end_at || input.endAt,
       pay_rate_cents: payRateCents,
-      status: 'open',
+      status: 'draft',
       created_at: nowIso()
     };
     repo.insertShift(shift);
     return shift;
+  }
+
+  function updateShiftStatus(shiftId, nextStatus, actor = 'business') {
+    requireString(shiftId, 'shiftId');
+    requireOneOf(nextStatus, 'status', ['draft', 'published', 'closed', 'cancelled']);
+    const shift = repo.findShiftById(shiftId);
+    if (!shift) throw error('shift_not_found', 'shift not found', { status: 404 });
+    const idempotent = assertTransition('shift', shift.status, nextStatus);
+    if (idempotent) return shift;
+    repo.updateShiftStatus(shiftId, nextStatus);
+    logTransition('shift', shiftId, shift.status, nextStatus, actor);
+    return repo.findShiftById(shiftId);
   }
 
   function applyToShift(shiftId, workerId) {
@@ -38,7 +70,7 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     requireString(workerId, 'workerId');
     const shift = repo.findShiftById(shiftId);
     if (!shift) throw error('shift_not_found', 'shift not found', { status: 404 });
-    if (shift.status !== 'open') throw error('shift_not_open', 'shift is not open', { status: 409 });
+    if (shift.status !== 'published') throw error('shift_not_published', 'shift is not published', { status: 409 });
     if (!repo.findWorkerById(workerId)) throw error('worker_not_found', 'worker not found', { status: 404 });
     const existingApplication = repo.listApplications().find((item) => item.shift_id === shiftId && item.worker_id === workerId);
     if (existingApplication) throw error('duplicate_application', 'worker already applied to this shift', { status: 409 });
@@ -72,10 +104,11 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
       repo.updateEscrowBalance(escrow.id, escrow.balance_cents - required);
       repo.insertEscrowTransaction({ id: id('etx'), business_id: businessId, assignment_id: null, type: 'lock', amount_cents: required, created_at: nowIso() });
 
-      repo.updateApplicationStatus(application.id, 'offered');
+      repo.updateApplicationStatus(application.id, 'accepted');
+      logTransition('application', application.id, application.status, 'accepted', 'business');
       const assignment = {
         id: id('asn'), shift_id: shift.id, application_id: application.id, worker_id: application.worker_id, business_id: businessId,
-        status: 'offered', escrow_locked_cents: required, contact_reveal_stage: 'accepted', created_at: nowIso()
+        status: 'assigned', escrow_locked_cents: required, contact_reveal_stage: 'accepted', created_at: nowIso()
       };
       try {
         repo.insertAssignment(assignment);
@@ -95,10 +128,8 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
   function acceptAssignment(assignmentId) {
     const assignment = repo.findAssignmentById(requireString(assignmentId, 'assignmentId'));
     if (!assignment) throw error('assignment_not_found', 'assignment not found', { status: 404 });
-    if (assignment.status !== 'offered') throw error('invalid_assignment_state', 'assignment cannot be accepted from current state', { status: 409 });
-    const acceptedAt = nowIso();
-    repo.updateAssignmentState(assignment.id, 'active', acceptedAt);
-    return repo.findAssignmentById(assignment.id);
+    // Deprecated compatibility no-op. Assignment is accepted at offer time.
+    return assignment;
   }
 
   function attendance(assignmentId, type) {
@@ -109,16 +140,18 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     if (!shift) throw error('shift_not_found', 'shift not found', { status: 404 });
     const now = Date.now();
     if (type === 'check_in') {
-      if (assignment.status !== 'active') throw error('invalid_assignment_state', 'assignment must be active to check in', { status: 409 });
+      if (assignment.status !== 'assigned') throw error('invalid_assignment_state', 'assignment must be assigned to check in', { status: 409 });
       const start = new Date(shift.start_at).getTime();
       if (now < start - 30 * 60000 || now > start + 60 * 60000) throw error('checkin_window_invalid', 'check-in outside allowed window', { status: 409 });
       repo.updateAssignmentState(assignment.id, 'in_progress');
+      logTransition('assignment', assignment.id, assignment.status, 'in_progress', 'worker');
     }
     if (type === 'check_out') {
       if (assignment.status !== 'in_progress') throw error('invalid_assignment_state', 'assignment must be in progress to check out', { status: 409 });
       const hasIn = repo.hasAttendanceCheckIn(assignmentId);
       if (!hasIn) throw error('checkin_required', 'check-in required before check-out', { status: 409 });
-      repo.updateAssignmentState(assignment.id, 'completed_pending_rating');
+      repo.updateAssignmentState(assignment.id, 'completed');
+      logTransition('assignment', assignment.id, assignment.status, 'completed', 'worker');
     }
     const event = { id: id('att'), assignment_id: assignmentId, type, timestamp: nowIso() };
     repo.insertAttendanceEvent(event);
@@ -134,10 +167,6 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     if (repo.hasRatingByRole(assignmentId, fromRole)) throw error('duplicate_rating', 'role already rated this assignment', { status: 409 });
     const rating = { id: id('rat'), assignment_id: assignmentId, from_role: fromRole, score, note: note || '', created_at: nowIso() };
     repo.insertRating(rating);
-    const all = repo.listRatingsByAssignmentId(assignmentId);
-    if (all.some((r) => r.from_role === 'worker') && all.some((r) => r.from_role === 'business')) {
-      repo.updateAssignmentState(assignment.id, 'completed_rated');
-    }
     return rating;
   }
 
@@ -149,7 +178,7 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
 
   function sendMessage(assignmentId, senderId, text) {
     const assignment = repo.findAssignmentById(requireString(assignmentId, 'assignmentId'));
-    if (!assignment || !['offered', 'active', 'in_progress', 'completed_pending_rating', 'completed_rated'].includes(assignment.status)) {
+    if (!assignment || !['assigned', 'in_progress', 'completed'].includes(assignment.status)) {
       throw error('chat_not_available', 'chat not available', { status: 409 });
     }
     requireString(senderId, 'senderId');
@@ -186,7 +215,8 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     return repo.withTransaction(() => {
       const assignment = repo.findAssignmentById(requireString(assignmentId, 'assignmentId'));
       if (!assignment) throw error('assignment_not_found', 'assignment not found', { status: 404 });
-      if (!['completed_pending_rating', 'completed_rated'].includes(assignment.status) && !force) throw error('assignment_not_completed', 'assignment not completed', { status: 409 });
+      if (assignment.status === 'cancelled') throw error('assignment_cancelled', 'cannot release payout for cancelled assignment', { status: 409 });
+      if (assignment.status !== 'completed') throw error('assignment_not_completed', 'assignment not completed', { status: 409 });
 
       const existing = repo.findPayoutByAssignmentId(assignmentId);
       if (existing) return existing;
@@ -211,27 +241,87 @@ function createMarketplaceService(repo = createMarketplaceRepository()) {
     requireOneOf(nextStatus, 'status', ['created', 'pending', 'paid', 'failed']);
     const payout = repo.findPayoutById(payoutId);
     if (!payout) throw error('payout_not_found', 'payout not found', { status: 404 });
-    const allowed = {
-      created: ['pending', 'failed'],
-      pending: ['paid', 'failed'],
-      paid: [],
-      failed: ['pending']
-    };
-    if (!allowed[payout.status]?.includes(nextStatus)) {
-      throw error('invalid_payout_state', 'invalid payout status transition', { status: 409 });
-    }
+    const idempotent = assertTransition('payout', payout.status, nextStatus);
+    if (idempotent) return payout;
     repo.updatePayoutStatus(payoutId, nextStatus, nowIso(), note);
+    logTransition('payout', payout.id, payout.status, nextStatus, 'admin');
     return repo.findPayoutById(payoutId);
+  }
+
+  function rejectApplication(applicationId, actor = 'business') {
+    requireString(applicationId, 'applicationId');
+    const application = repo.findApplicationById(applicationId);
+    if (!application) throw error('application_not_found', 'application not found', { status: 404 });
+    const idempotent = assertTransition('application', application.status, 'rejected');
+    if (idempotent) return application;
+    repo.updateApplicationStatus(applicationId, 'rejected');
+    logTransition('application', applicationId, application.status, 'rejected', actor);
+    return repo.findApplicationById(applicationId);
+  }
+
+  function withdrawApplication(applicationId, actor = 'worker') {
+    requireString(applicationId, 'applicationId');
+    const application = repo.findApplicationById(applicationId);
+    if (!application) throw error('application_not_found', 'application not found', { status: 404 });
+    const idempotent = assertTransition('application', application.status, 'withdrawn');
+    if (idempotent) return application;
+    repo.updateApplicationStatus(applicationId, 'withdrawn');
+    logTransition('application', applicationId, application.status, 'withdrawn', actor);
+    return repo.findApplicationById(applicationId);
+  }
+
+  function cancelAssignment(assignmentId, actor = 'business') {
+    return repo.withTransaction(() => {
+      requireString(assignmentId, 'assignmentId');
+      const assignment = repo.findAssignmentById(assignmentId);
+      if (!assignment) throw error('assignment_not_found', 'assignment not found', { status: 404 });
+      const idempotent = assertTransition('assignment', assignment.status, 'cancelled');
+      if (idempotent) return assignment;
+
+      const escrow = repo.findEscrowByBusinessId(assignment.business_id);
+      if (!escrow) throw error('escrow_not_found', 'escrow account not found', { status: 404 });
+      repo.updateEscrowBalance(escrow.id, escrow.balance_cents + assignment.escrow_locked_cents);
+      repo.insertEscrowTransaction({
+        id: id('etx'),
+        business_id: assignment.business_id,
+        assignment_id: assignment.id,
+        type: 'unlock_cancel',
+        amount_cents: assignment.escrow_locked_cents,
+        created_at: nowIso()
+      });
+
+      repo.updateAssignmentState(assignmentId, 'cancelled');
+      logTransition('assignment', assignmentId, assignment.status, 'cancelled', actor);
+      return repo.findAssignmentById(assignmentId);
+    });
   }
 
   function listProblemCases() {
     const flags = repo.listViolationFlags();
     const failedPayouts = repo.listPayouts().filter((p) => p.status === 'failed');
-    const stalledAssignments = repo.listAssignments().filter((a) => a.status === 'completed_pending_rating');
+    const stalledAssignments = repo.listAssignments().filter((a) => a.status === 'completed');
     return { flags, failedPayouts, stalledAssignments };
   }
 
-  return { createShift, applyToShift, offerAssignment, acceptAssignment, attendance, addRating, getChatByAssignment, sendMessage, revealContacts, fundEscrow, releasePayment, updatePayoutStatus, listProblemCases };
+  return {
+    createShift,
+    updateShiftStatus,
+    applyToShift,
+    offerAssignment,
+    rejectApplication,
+    withdrawApplication,
+    acceptAssignment,
+    cancelAssignment,
+    attendance,
+    addRating,
+    getChatByAssignment,
+    sendMessage,
+    revealContacts,
+    fundEscrow,
+    releasePayment,
+    updatePayoutStatus,
+    listProblemCases
+  };
 }
 
 module.exports = { createMarketplaceService };

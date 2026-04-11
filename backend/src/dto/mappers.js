@@ -1,26 +1,22 @@
 function shiftProductStatus(shift, assignments) {
   if (shift.status === 'cancelled') return 'cancelled';
   if (shift.status === 'closed') return 'closed';
+  if (shift.status === 'draft') return 'draft';
   const active = assignments.filter((a) => a.shift_id === shift.id && !['cancelled'].includes(a.status));
-  if (active.some((a) => ['offered', 'active', 'in_progress', 'completed_pending_rating', 'completed_rated'].includes(a.status))) return 'filled';
-  return 'open';
+  if (active.some((a) => ['assigned', 'in_progress', 'completed'].includes(a.status))) return 'filled';
+  return 'published';
 }
 
 function normalizeApplicationStatus(status) {
-  if (status === 'applied') return 'submitted';
-  if (status === 'offered') return 'offered';
-  if (status === 'rejected') return 'rejected';
-  if (status === 'withdrawn') return 'withdrawn';
-  return 'submitted';
+  if (['applied', 'accepted', 'rejected', 'withdrawn'].includes(status)) return status;
+  return 'applied';
 }
 
 function normalizeAssignmentStatus(status, payoutStatus = null) {
   if (status === 'cancelled') return 'cancelled';
-  if (status === 'offered') return 'offered';
-  if (status === 'active') return 'active';
-  if (status === 'in_progress') return 'checked_in';
-  if (status === 'completed_pending_rating') return 'checked_out';
-  if (status === 'completed_rated') return payoutStatus === 'paid' ? 'paid' : 'completed';
+  if (status === 'assigned') return 'assigned';
+  if (status === 'in_progress') return 'in_progress';
+  if (status === 'completed') return payoutStatus === 'paid' ? 'paid' : 'completed';
   return 'unknown';
 }
 

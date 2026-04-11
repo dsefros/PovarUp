@@ -38,7 +38,7 @@ function createSqlSeed(database) {
       INSERT OR IGNORE INTO locations (id, business_id, name, address) VALUES ('loc_1', 'biz_1', 'Downtown Kitchen', '100 Main St');
       INSERT OR IGNORE INTO escrow_accounts (id, business_id, balance_cents) VALUES ('escrow_biz_1', 'biz_1', 500000);
       INSERT OR IGNORE INTO shifts (id, business_id, location_id, title, start_at, end_at, pay_rate_cents, status, created_at)
-      VALUES ('shift_1', 'biz_1', 'loc_1', 'Line Cook', datetime('now', '+1 hour'), datetime('now', '+5 hour'), 2500, 'open', CURRENT_TIMESTAMP);
+      VALUES ('shift_1', 'biz_1', 'loc_1', 'Line Cook', datetime('now', '+1 hour'), datetime('now', '+5 hour'), 2500, 'published', CURRENT_TIMESTAMP);
     `);
   };
 }

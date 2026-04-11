@@ -75,7 +75,8 @@ Optional onboarding endpoint: `POST /api/auth/onboard` with invite code `WORKER-
   - Sessions are expiry-checked on every authenticated route.
   - `POST /api/auth/logout` invalidates bearer sessions.
 - **Worker flow (Android + API)**
-  - List shifts, inspect shift details, apply, view applications/assignments, accept offers, check in/out.
+  - List published shifts, inspect shift details, apply, view applications/assignments, then check in/out.
+  - Worker-side accept action is removed from Android; assignments are treated as accepted when offered by business.
   - View active shift, completed history, and payout statuses.
   - UI includes loading/empty/error/retry states and disables invalid actions.
 - **Business flow**
@@ -93,12 +94,17 @@ Optional onboarding endpoint: `POST /api/auth/onboard` with invite code `WORKER-
 - `paid`: payout completed.
 - `failed`: payout failed and requires operator retry/handling.
 
-## Product-facing status model
+## Lifecycle model
 
-- Shift: `open`, `filled`, `closed`, `cancelled`
-- Application: `submitted`, `offered`, `rejected`, `withdrawn`
-- Assignment: `offered`, `active`, `checked_in`, `checked_out`, `completed`, `paid`, `cancelled`
-- Payout: `created`, `pending`, `paid`, `failed`
+Backend status is canonical. Android reads `productStatus` directly and does pure UI mapping only.
+
+- Shift lifecycle: `draft -> published -> closed -> cancelled`
+- Application lifecycle: `applied -> accepted -> rejected -> withdrawn` (with guarded branch transitions)
+- Assignment lifecycle: `assigned -> in_progress -> completed -> cancelled`
+  - Cancellation is allowed only from `assigned` or `in_progress`.
+- Payout lifecycle: `created -> pending -> paid -> failed`
+
+Invalid transitions are rejected with `409 invalid_transition` and transition endpoints are explicit (publish/close/cancel shift, reject/withdraw application, cancel assignment, payout status progression). Cancelled assignments cannot create payouts.
 
 ## Run and test
 

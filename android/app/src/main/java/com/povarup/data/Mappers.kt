@@ -14,7 +14,7 @@ fun ShiftDto.toDomain(): Shift = Shift(
     endAt = endAt,
     payRateCents = payRateCents,
     status = status,
-    productStatus = productStatus ?: normalizedStatus ?: status
+    productStatus = productStatus ?: status
 )
 
 fun ApplicationDto.toDomain(): Application = Application(
@@ -22,7 +22,7 @@ fun ApplicationDto.toDomain(): Application = Application(
     shiftId = shiftId,
     workerId = workerId,
     status = status,
-    productStatus = productStatus ?: normalizedStatus ?: status
+    productStatus = productStatus ?: status
 )
 
 fun SessionDto.toDomain(): SessionToken = SessionToken(token = token, userId = userId, role = role)
@@ -33,7 +33,7 @@ fun AssignmentDto.toDomain(): Assignment = Assignment(
     workerId = workerId,
     businessId = businessId,
     status = status,
-    productStatus = productStatus ?: normalizedStatus ?: status,
+    productStatus = productStatus ?: status,
     escrowLockedCents = escrowLockedCents
 )
 

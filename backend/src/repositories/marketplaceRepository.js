@@ -10,6 +10,7 @@ function createMarketplaceRepository(store = db) {
     listAssignments: () => store.assignments,
     listMessagesByChatId: (chatId) => store.messages.filter((m) => m.chat_id === chatId),
     listPayoutsByWorkerId: (workerId) => store.payouts.filter((p) => p.worker_id === workerId),
+    listEscrowTransactions: () => store.escrow_transactions,
     listViolationFlags: () => store.violation_flags,
     listAccounts: () => store.accounts,
     findSessionByToken: (token) => store.sessions.find((s) => s.token === token),
@@ -69,6 +70,10 @@ function createMarketplaceRepository(store = db) {
       if (!item) return;
       item.start_at = startAt;
       item.end_at = endAt;
+    },
+    updateShiftStatus: (shiftId, status) => {
+      const item = store.shifts.find((s) => s.id === shiftId);
+      if (item) item.status = status;
     },
     listPayouts: () => store.payouts,
     findPayoutById: (payoutId) => store.payouts.find((p) => p.id === payoutId),

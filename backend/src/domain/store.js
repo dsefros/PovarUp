@@ -46,7 +46,7 @@ function seed() {
     start_at: new Date(Date.now() + 3600_000).toISOString(),
     end_at: new Date(Date.now() + 5 * 3600_000).toISOString(),
     pay_rate_cents: 2500,
-    status: 'open',
+    status: 'published',
     created_at: nowIso()
   });
 }
