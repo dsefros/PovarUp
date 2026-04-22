@@ -1,5 +1,6 @@
 package com.povarup.core
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -7,342 +8,304 @@ import com.povarup.data.ApiMarketplaceRepository
 import com.povarup.data.CreateShiftRequest
 import com.povarup.data.MarketplaceRepository
 import com.povarup.data.ProblemCasesDto
-import com.povarup.domain.Application
-import com.povarup.domain.Assignment
-import com.povarup.domain.Payout
-import com.povarup.domain.Shift
+import com.povarup.domain.UserRole
+import com.povarup.domain.capability
+import java.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import android.util.Log
-import java.time.Duration
-import java.time.Instant
 
 data class AppDispatchers(val io: CoroutineDispatcher = Dispatchers.IO)
 
-enum class DashboardLoadState { IDLE, LOADING, READY, ERROR }
+enum class UiLoadState { IDLE, LOADING, CONTENT, ERROR }
+
+data class MainCapabilities(
+    val canRefresh: Boolean = true,
+    val canLogin: Boolean = true,
+    val canApplySelectedShift: Boolean = false,
+    val canCheckInSelectedAssignment: Boolean = false,
+    val canCheckOutSelectedAssignment: Boolean = false,
+    val canCreateShift: Boolean = false,
+    val canPublishSelectedShift: Boolean = false,
+    val canOfferSelectedApplication: Boolean = false,
+    val canRejectSelectedApplication: Boolean = false,
+    val canWithdrawSelectedApplication: Boolean = false,
+    val canCloseSelectedShift: Boolean = false,
+    val canCancelSelectedShift: Boolean = false,
+    val canCancelSelectedAssignment: Boolean = false,
+    val canReleaseSelectedAssignmentPayout: Boolean = false,
+    val canProgressAdminPayout: Boolean = false
+)
+
+data class WorkerHomeState(
+    val shifts: List<com.povarup.domain.Shift> = emptyList(),
+    val applications: List<com.povarup.domain.Application> = emptyList(),
+    val assignments: List<com.povarup.domain.Assignment> = emptyList(),
+    val payouts: List<com.povarup.domain.Payout> = emptyList(),
+    val availableShifts: List<com.povarup.domain.Shift> = emptyList(),
+    val activeAssignment: com.povarup.domain.Assignment? = null,
+    val completedAssignments: List<com.povarup.domain.Assignment> = emptyList()
+)
+
+data class BusinessHomeState(
+    val ownedShifts: List<com.povarup.domain.Shift> = emptyList(),
+    val applicationsForSelectedShift: List<com.povarup.domain.Application> = emptyList(),
+    val assignments: List<com.povarup.domain.Assignment> = emptyList(),
+    val payoutReadyAssignments: List<com.povarup.domain.Assignment> = emptyList()
+)
+
+data class AdminHomeState(
+    val assignments: List<com.povarup.domain.Assignment> = emptyList(),
+    val payouts: List<com.povarup.domain.Payout> = emptyList(),
+    val problemCases: ProblemCasesDto = ProblemCasesDto()
+)
+
+sealed class HomeState {
+    data class Worker(val content: WorkerHomeState) : HomeState()
+    data class Business(val content: BusinessHomeState) : HomeState()
+    data class Admin(val content: AdminHomeState) : HomeState()
+    data object None : HomeState()
+}
 
 data class MainUiState(
-    val role: String,
-    val baseUrl: String,
+    val role: UserRole = UserRole.WORKER,
+    val baseUrl: String = "",
     val hasSession: Boolean = false,
     val sessionUserId: String? = null,
-    val shifts: List<Shift> = emptyList(),
-    val applications: List<Application> = emptyList(),
-    val assignments: List<Assignment> = emptyList(),
-    val payouts: List<Payout> = emptyList(),
-    val adminAssignments: List<Assignment> = emptyList(),
-    val adminPayouts: List<Payout> = emptyList(),
-    val adminProblemCases: ProblemCasesDto = ProblemCasesDto(),
+    val loadState: UiLoadState = UiLoadState.IDLE,
+    val home: HomeState = HomeState.None,
     val selectedShiftId: String? = null,
     val selectedAssignmentId: String? = null,
+    val selectedApplicationId: String? = null,
     val statusMessage: String? = null,
     val errorMessage: String? = null,
-    val dashboardState: DashboardLoadState = DashboardLoadState.IDLE,
     val inFlightActionKeys: Set<String> = emptySet(),
+    val capabilities: MainCapabilities = MainCapabilities(),
     val importantEvents: List<String> = emptyList()
 )
+
+sealed class MainAction {
+    data class Login(val userId: String, val password: String) : MainAction()
+    data object Logout : MainAction()
+    data object Refresh : MainAction()
+    data class UpdateSelections(val shiftId: String? = null, val assignmentId: String? = null, val applicationId: String? = null) : MainAction()
+    data class ApplyToShift(val shiftId: String) : MainAction()
+    data class CheckIn(val assignmentId: String) : MainAction()
+    data class CheckOut(val assignmentId: String) : MainAction()
+    data class PublishShift(val shiftId: String) : MainAction()
+    data class CreateShift(val title: String, val locationId: String, val payRateCents: Int) : MainAction()
+    data class OfferAssignment(val applicationId: String) : MainAction()
+    data class RejectApplication(val applicationId: String) : MainAction()
+    data class WithdrawApplication(val applicationId: String) : MainAction()
+    data class CloseShift(val shiftId: String) : MainAction()
+    data class CancelShift(val shiftId: String) : MainAction()
+    data class CancelAssignment(val assignmentId: String) : MainAction()
+    data class ReleasePayout(val assignmentId: String) : MainAction()
+    data class ProgressAdminPayout(val payoutId: String, val status: String) : MainAction()
+    data object ClearSession : MainAction()
+    data object DismissError : MainAction()
+}
 
 class MainViewModel(
     private val repository: MarketplaceRepository = ApiMarketplaceRepository(),
     private val dispatchers: AppDispatchers = AppDispatchers()
 ) : ViewModel() {
-    private val roleState = RoleStateHolder(repository).current()
     private val _uiState = MutableStateFlow(
         MainUiState(
-            role = roleState.role,
-            baseUrl = roleState.baseUrl,
+            role = UserRole.from(repository.currentRole()),
+            baseUrl = repository.baseUrl(),
             hasSession = repository.currentSession() != null,
             sessionUserId = repository.currentSession()?.userId
         )
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    fun login(userId: String, password: String) {
-        runAsync("login", "Logged in") { repository.login(userId.trim(), password.trim()) }
-    }
+    init { applyDerivedState(_uiState.value) }
 
-    fun logout() {
-        runAsync("logout", "Logged out") { repository.logout() }
-    }
-
-    fun setSelectedShift(shiftId: String) {
-        _uiState.value = _uiState.value.copy(selectedShiftId = shiftId.trim().ifBlank { null })
-    }
-
-    fun loadDashboard() {
-        if (_uiState.value.dashboardState == DashboardLoadState.LOADING) return
-        _uiState.value = _uiState.value.copy(dashboardState = DashboardLoadState.LOADING, errorMessage = null)
-        viewModelScope.launch(dispatchers.io) {
-            refreshDashboardState(keepStatusMessage = true)
+    fun onAction(action: MainAction) {
+        when (action) {
+            is MainAction.Login -> runAsync("login", "Logged in") { repository.login(action.userId.trim(), action.password.trim()) }
+            MainAction.Logout -> runAsync("logout", "Logged out") { repository.logout() }
+            MainAction.Refresh -> loadDashboard()
+            is MainAction.UpdateSelections -> applyDerivedState(_uiState.value.withSelections(action.shiftId, action.assignmentId, action.applicationId))
+            is MainAction.ApplyToShift -> applyToShift(action.shiftId)
+            is MainAction.CheckIn -> checkIn(action.assignmentId)
+            is MainAction.CheckOut -> checkOut(action.assignmentId)
+            is MainAction.PublishShift -> requireRole(UserRole.BUSINESS, "Only businesses can publish shifts.") { runAsync("publish_shift:${action.shiftId.trim()}", "Shift published") { repository.publishShift(action.shiftId.trim()) } }
+            is MainAction.CreateShift -> requireRole(UserRole.BUSINESS, "Only businesses can create shifts.") { runAsync("create_shift", "Shift created") { repository.createShift(CreateShiftRequest(action.locationId.trim(), action.title.trim(), Instant.now().toString(), Instant.now().plusSeconds(7200).toString(), action.payRateCents)) } }
+            is MainAction.OfferAssignment -> requireRole(UserRole.BUSINESS, "Only businesses can offer assignments.") { runAsync("offer:${action.applicationId.trim()}", "Offer sent") { repository.offerAssignment(action.applicationId.trim()) } }
+            is MainAction.RejectApplication -> requireRole(UserRole.BUSINESS, "Only businesses can reject applications.") { runAsync("reject:${action.applicationId.trim()}", "Application rejected") { repository.rejectApplication(action.applicationId.trim()) } }
+            is MainAction.WithdrawApplication -> requireRole(UserRole.WORKER, "Only workers can withdraw applications.") { runAsync("withdraw:${action.applicationId.trim()}", "Application withdrawn") { repository.withdrawApplication(action.applicationId.trim()) } }
+            is MainAction.CloseShift -> requireRole(UserRole.BUSINESS, "Only businesses can close shifts.") { runAsync("close_shift:${action.shiftId.trim()}", "Shift closed") { repository.closeShift(action.shiftId.trim()) } }
+            is MainAction.CancelShift -> requireRole(UserRole.BUSINESS, "Only businesses can cancel shifts.") { runAsync("cancel_shift:${action.shiftId.trim()}", "Shift cancelled") { repository.cancelShift(action.shiftId.trim()) } }
+            is MainAction.CancelAssignment -> requireRole(UserRole.BUSINESS, "Only businesses can cancel assignments.") { runAsync("cancel_assignment:${action.assignmentId.trim()}", "Assignment cancelled") { repository.cancelAssignment(action.assignmentId.trim()) } }
+            is MainAction.ReleasePayout -> requireRole(UserRole.BUSINESS, "Only businesses can release payouts.") { runAsync("release:${action.assignmentId.trim()}", "Payout released") { repository.releasePayout(action.assignmentId.trim()) } }
+            is MainAction.ProgressAdminPayout -> requireRole(UserRole.ADMIN, "Only admins can progress payout status.") { runAsync("admin_payout:${action.payoutId}:${action.status}", "Payout moved to ${action.status}") { repository.updateAdminPayoutStatus(action.payoutId.trim(), action.status) } }
+            MainAction.ClearSession -> clearSession()
+            MainAction.DismissError -> applyDerivedState(_uiState.value.copy(errorMessage = null))
         }
     }
 
-    fun applyToShift(shiftId: String) {
-        if (!guardRole("worker", "Only workers can apply to shifts.")) return
-        val normalizedShiftId = shiftId.trim()
-        val alreadyRelated = _uiState.value.applications.any { it.shiftId == normalizedShiftId } ||
-            _uiState.value.assignments.any { it.shiftId == normalizedShiftId }
-        if (alreadyRelated) {
-            _uiState.value = _uiState.value.copy(errorMessage = "You already applied or were assigned to this shift.", statusMessage = null)
-            return
-        }
-        runAsync("apply:${normalizedShiftId}", "Applied") { repository.applyToShift(normalizedShiftId) }
+    private fun loadDashboard() {
+        if (_uiState.value.loadState == UiLoadState.LOADING) return
+        applyDerivedState(_uiState.value.copy(loadState = UiLoadState.LOADING, errorMessage = null))
+        viewModelScope.launch(dispatchers.io) { refreshDashboardState(keepStatusMessage = true) }
     }
 
-    fun checkIn(assignmentId: String) {
-        if (!guardRole("worker", "Only workers can check in.")) return
-        runAsync("checkin:${assignmentId.trim()}", "Check-in completed") { repository.checkIn(assignmentId.trim()) }
-    }
-
-    fun checkOut(assignmentId: String) {
-        if (!guardRole("worker", "Only workers can check out.")) return
-        val normalizedAssignmentId = assignmentId.trim()
-        val assignment = _uiState.value.assignments.firstOrNull { it.id == normalizedAssignmentId }
-        if (assignment != null && assignment.status != "in_progress") {
-            _uiState.value = _uiState.value.copy(errorMessage = "Check-out is only available for in-progress shifts.", statusMessage = null)
-            return
-        }
-        runAsync("checkout:${normalizedAssignmentId}", "Check-out completed") { repository.checkOut(normalizedAssignmentId) }
-    }
-
-    fun offerAssignment(applicationId: String) {
-        if (!guardRole("business", "Only businesses can offer assignments.")) return
-        runAsync("offer:${applicationId.trim()}", "Offer sent") { repository.offerAssignment(applicationId.trim()) }
-    }
-
-    fun withdrawApplication(applicationId: String) {
-        if (!guardRole("worker", "Only workers can withdraw applications.")) return
-        runAsync("withdraw:${applicationId.trim()}", "Application withdrawn") { repository.withdrawApplication(applicationId.trim()) }
-    }
-
-    fun rejectApplication(applicationId: String) {
-        if (!guardRole("business", "Only businesses can reject applications.")) return
-        runAsync("reject:${applicationId.trim()}", "Application rejected") { repository.rejectApplication(applicationId.trim()) }
-    }
-
-    fun closeShift(shiftId: String) {
-        if (!guardRole("business", "Only businesses can close shifts.")) return
-        runAsync("close_shift:${shiftId.trim()}", "Shift closed") { repository.closeShift(shiftId.trim()) }
-    }
-
-    fun publishShift(shiftId: String) {
-        if (!guardRole("business", "Only businesses can publish shifts.")) return
-        runAsync("publish_shift:${shiftId.trim()}", "Shift published") { repository.publishShift(shiftId.trim()) }
-    }
-
-    fun cancelShift(shiftId: String) {
-        if (!guardRole("business", "Only businesses can cancel shifts.")) return
-        runAsync("cancel_shift:${shiftId.trim()}", "Shift cancelled") { repository.cancelShift(shiftId.trim()) }
-    }
-
-    fun cancelAssignment(assignmentId: String) {
-        if (!guardRole("business", "Only businesses can cancel assignments.")) return
-        runAsync("cancel_assignment:${assignmentId.trim()}", "Assignment cancelled") { repository.cancelAssignment(assignmentId.trim()) }
-    }
-
-    fun releasePayout(assignmentId: String) {
-        if (!guardRole("business", "Only businesses can release payouts.")) return
-        runAsync("release:${assignmentId.trim()}", "Payout released") { repository.releasePayout(assignmentId.trim()) }
-    }
-
-    fun progressAdminPayout(payoutId: String, status: String) {
-        if (!guardRole("admin", "Only admins can progress payout status.")) return
-        runAsync("admin_payout:$payoutId:$status", "Payout moved to $status") { repository.updateAdminPayoutStatus(payoutId.trim(), status) }
-    }
-
-    fun createShift(title: String, locationId: String, payRateCents: Int) {
-        if (!guardRole("business", "Only businesses can create shifts.")) return
-        runAsync("create_shift", "Shift created") {
-            repository.createShift(
-                CreateShiftRequest(
-                    locationId = locationId.trim(),
-                    title = title.trim(),
-                    startAt = Instant.now().toString(),
-                    endAt = Instant.now().plusSeconds(7200).toString(),
-                    payRateCents = payRateCents
-                )
-            )
+    private fun applyToShift(shiftId: String) {
+        requireRole(UserRole.WORKER, "Only workers can apply to shifts.") {
+            val normalized = shiftId.trim()
+            val state = _uiState.value.withSelections(shiftId = normalized)
+            val target = state.home.allShifts().firstOrNull { it.id == normalized }
+            val relatedShiftIds = (state.home.allApplications().map { it.shiftId } + state.home.allAssignments().map { it.shiftId }).toSet()
+            val canApply = target?.capability(UserRole.WORKER, relatedShiftIds.contains(normalized))?.canApply ?: false
+            if (!canApply) return@requireRole applyDerivedState(state.copy(errorMessage = "Shift is not available for apply.", statusMessage = null))
+            applyDerivedState(state)
+            runAsync("apply:$normalized", "Applied") { repository.applyToShift(normalized) }
         }
     }
 
-    fun clearSession() {
+    private fun checkIn(assignmentId: String) = workerAssignmentAction(
+        assignmentId = assignmentId,
+        actionKeyPrefix = "checkin",
+        notAllowedMessage = "Check-in is only available for assigned shifts.",
+        successMessage = "Check-in completed",
+        predicate = { it.capability(UserRole.WORKER).canCheckIn },
+        request = { repository.checkIn(it) }
+    )
+
+    private fun checkOut(assignmentId: String) = workerAssignmentAction(
+        assignmentId = assignmentId,
+        actionKeyPrefix = "checkout",
+        notAllowedMessage = "Check-out is only available for in-progress shifts.",
+        successMessage = "Check-out completed",
+        predicate = { it.capability(UserRole.WORKER).canCheckOut },
+        request = { repository.checkOut(it) }
+    )
+
+    private fun workerAssignmentAction(
+        assignmentId: String,
+        actionKeyPrefix: String,
+        notAllowedMessage: String,
+        successMessage: String,
+        predicate: (com.povarup.domain.Assignment) -> Boolean,
+        request: (String) -> Result<Unit>
+    ) {
+        requireRole(UserRole.WORKER, "Only workers can ${if (actionKeyPrefix == "checkin") "check in" else "check out"}.") {
+            val normalized = assignmentId.trim()
+            val state = _uiState.value.withSelections(assignmentId = normalized)
+            val assignment = state.home.allAssignments().firstOrNull { it.id == normalized }
+            if (assignment != null && !predicate(assignment)) return@requireRole applyDerivedState(state.copy(errorMessage = notAllowedMessage, statusMessage = null))
+            applyDerivedState(state)
+            runAsync("$actionKeyPrefix:$normalized", successMessage) { request(normalized) }
+        }
+    }
+
+    private fun clearSession() {
         repository.clearSession()
-        _uiState.value = _uiState.value.copy(
-            hasSession = false,
-            sessionUserId = null,
-            statusMessage = "Session cleared",
-            errorMessage = null,
-            dashboardState = DashboardLoadState.IDLE,
-            shifts = emptyList(),
-            applications = emptyList(),
-            assignments = emptyList(),
-            payouts = emptyList(),
-            adminAssignments = emptyList(),
-            adminPayouts = emptyList(),
-            adminProblemCases = ProblemCasesDto(),
-            importantEvents = emptyList()
+        applyDerivedState(
+            _uiState.value.copy(
+                role = UserRole.from(repository.currentRole()),
+                hasSession = false,
+                sessionUserId = null,
+                statusMessage = "Session cleared",
+                errorMessage = null,
+                loadState = UiLoadState.IDLE,
+                home = HomeState.None,
+                selectedShiftId = null,
+                selectedAssignmentId = null,
+                selectedApplicationId = null,
+                importantEvents = emptyList()
+            )
         )
     }
 
-    fun isActionInFlight(actionKey: String): Boolean = _uiState.value.inFlightActionKeys.contains(actionKey)
-
-    private fun guardRole(expectedRole: String, message: String): Boolean {
-        if (repository.currentRole() == expectedRole) return true
-        _uiState.value = _uiState.value.copy(errorMessage = message, statusMessage = null)
-        return false
+    private fun requireRole(expectedRole: UserRole, message: String, block: () -> Unit) {
+        if (_uiState.value.role == expectedRole) return block()
+        applyDerivedState(_uiState.value.copy(errorMessage = message, statusMessage = null))
     }
 
     private fun <T> runAsync(actionKey: String, successMsg: String, action: () -> Result<T>) {
         if (_uiState.value.inFlightActionKeys.contains(actionKey)) return
-        _uiState.value = _uiState.value.copy(inFlightActionKeys = _uiState.value.inFlightActionKeys + actionKey, errorMessage = null)
+        applyDerivedState(_uiState.value.copy(inFlightActionKeys = _uiState.value.inFlightActionKeys + actionKey, errorMessage = null))
         viewModelScope.launch(dispatchers.io) {
             Log.i("PovarUp", "action_start key=$actionKey")
             val result = action()
             if (result.isFailure) {
                 val message = result.exceptionOrNull()?.message ?: "Request failed"
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = message,
-                    statusMessage = null,
-                    inFlightActionKeys = _uiState.value.inFlightActionKeys - actionKey
-                )
-                Log.w("PovarUp", "action_failed key=$actionKey message=$message")
+                applyDerivedState(baseSessionState().copy(errorMessage = message, statusMessage = null, inFlightActionKeys = _uiState.value.inFlightActionKeys - actionKey))
                 return@launch
             }
-
-            _uiState.value = _uiState.value.copy(
-                hasSession = repository.currentSession() != null,
-                sessionUserId = repository.currentSession()?.userId,
-                statusMessage = successMsg,
-                errorMessage = null,
-                inFlightActionKeys = _uiState.value.inFlightActionKeys - actionKey
-            )
-            Log.i("PovarUp", "action_success key=$actionKey")
+            applyDerivedState(baseSessionState().copy(statusMessage = successMsg, errorMessage = null, inFlightActionKeys = _uiState.value.inFlightActionKeys - actionKey))
             refreshDashboardState(keepStatusMessage = true)
         }
     }
 
     private fun refreshDashboardState(keepStatusMessage: Boolean) {
-        val role = repository.currentRole()
-        val selectedShiftId = _uiState.value.selectedShiftId
-
-        val shiftsResult = if (role == "business") repository.listBusinessShifts() else repository.listShifts()
-        if (shiftsResult.isFailure) {
-            showDashboardFailure(shiftsResult.exceptionOrNull(), keepStatusMessage)
-            return
-        }
-
+        val role = UserRole.from(repository.currentRole())
+        val shiftsResult = if (role == UserRole.BUSINESS) repository.listBusinessShifts() else repository.listShifts()
+        if (shiftsResult.isFailure) return showDashboardFailure(shiftsResult.exceptionOrNull(), keepStatusMessage)
         val shifts = shiftsResult.getOrThrow()
-        val effectiveShiftId = selectedShiftId?.takeIf { id -> shifts.any { it.id == id } } ?: shifts.firstOrNull()?.id
 
-        val applicationsResult = if (role == "business" && effectiveShiftId != null) {
-            repository.listShiftApplications(effectiveShiftId)
-        } else if (role == "business") {
-            Result.success(emptyList())
-        } else {
-            repository.listApplications()
-        }
-        if (applicationsResult.isFailure) {
-            showDashboardFailure(applicationsResult.exceptionOrNull(), keepStatusMessage)
-            return
-        }
+        val effectiveShiftId = _uiState.value.selectedShiftId?.takeIf { id -> shifts.any { it.id == id } } ?: shifts.firstOrNull()?.id
+        val applicationsResult = if (role == UserRole.BUSINESS && effectiveShiftId != null) repository.listShiftApplications(effectiveShiftId) else if (role == UserRole.BUSINESS) Result.success(emptyList()) else repository.listApplications()
+        if (applicationsResult.isFailure) return showDashboardFailure(applicationsResult.exceptionOrNull(), keepStatusMessage)
 
         val assignmentsResult = repository.listAssignments()
-        if (assignmentsResult.isFailure) {
-            showDashboardFailure(assignmentsResult.exceptionOrNull(), keepStatusMessage)
-            return
-        }
+        if (assignmentsResult.isFailure) return showDashboardFailure(assignmentsResult.exceptionOrNull(), keepStatusMessage)
 
         val applications = applicationsResult.getOrThrow()
         val assignments = assignmentsResult.getOrThrow()
-        val payoutsResult = loadPayouts(role)
-        if (payoutsResult.isFailure) {
-            showDashboardFailure(payoutsResult.exceptionOrNull(), keepStatusMessage)
-            return
-        }
+        val payoutsResult = if (role == UserRole.WORKER) repository.listMyPayouts() else Result.success(emptyList())
+        if (payoutsResult.isFailure) return showDashboardFailure(payoutsResult.exceptionOrNull(), keepStatusMessage)
         val payouts = payoutsResult.getOrThrow()
 
-        val adminAssignments = if (role == "admin") repository.listAdminAssignments().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else emptyList()
-        val adminPayouts = if (role == "admin") repository.listAdminPayouts().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else emptyList()
-        val adminProblemCases = if (role == "admin") repository.getAdminProblemCases().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else ProblemCasesDto()
+        val adminAssignments = if (role == UserRole.ADMIN) repository.listAdminAssignments().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else emptyList()
+        val adminPayouts = if (role == UserRole.ADMIN) repository.listAdminPayouts().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else emptyList()
+        val adminProblemCases = if (role == UserRole.ADMIN) repository.getAdminProblemCases().getOrElse { return showDashboardFailure(it, keepStatusMessage) } else ProblemCasesDto()
 
-        _uiState.value = _uiState.value.copy(
-            role = role,
-            hasSession = repository.currentSession() != null,
-            sessionUserId = repository.currentSession()?.userId,
-            shifts = shifts,
-            applications = applications,
-            assignments = assignments,
-            payouts = payouts,
-            adminAssignments = adminAssignments,
-            adminPayouts = adminPayouts,
-            adminProblemCases = adminProblemCases,
-            selectedShiftId = effectiveShiftId,
-            selectedAssignmentId = assignments.firstOrNull()?.id,
-            errorMessage = null,
-            statusMessage = if (keepStatusMessage) _uiState.value.statusMessage else null,
-            dashboardState = DashboardLoadState.READY,
-            importantEvents = deriveImportantEvents(shifts, assignments, payouts)
+        val snapshot = DashboardSnapshot(role, shifts, applications, assignments, payouts, adminAssignments, adminPayouts, adminProblemCases)
+        val home = buildHomeState(snapshot)
+        applyDerivedState(
+            baseSessionState().copy(
+                home = home,
+                selectedShiftId = effectiveShiftId,
+                selectedAssignmentId = _uiState.value.selectedAssignmentId?.takeIf { id -> assignments.any { it.id == id } } ?: assignments.firstOrNull()?.id,
+                selectedApplicationId = _uiState.value.selectedApplicationId?.takeIf { id -> applications.any { it.id == id } } ?: applications.firstOrNull()?.id,
+                errorMessage = null,
+                statusMessage = if (keepStatusMessage) _uiState.value.statusMessage else null,
+                loadState = UiLoadState.CONTENT,
+                importantEvents = deriveImportantEvents(shifts, assignments, payouts)
+            )
         )
-    }
-
-    private fun loadPayouts(role: String): Result<List<Payout>> {
-        if (role != "worker") return Result.success(emptyList())
-        return repository.listMyPayouts()
-    }
-
-    private fun deriveImportantEvents(shifts: List<Shift>, assignments: List<Assignment>, payouts: List<Payout>): List<String> {
-        val shiftById = shifts.associateBy { it.id }
-        val events = mutableListOf<String>()
-
-        assignments.filter { it.productStatus == "assigned" }.forEach { assignment ->
-            val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
-            events += "Assigned: $shiftTitle (${assignment.id})."
-        }
-
-        assignments.filter { it.productStatus == "in_progress" }.forEach { assignment ->
-            val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
-            events += "In progress: $shiftTitle (${assignment.id})."
-        }
-
-        assignments.filter { it.productStatus == "completed" || it.productStatus == "paid" }.forEach { assignment ->
-            val shiftTitle = shiftById[assignment.shiftId]?.title ?: assignment.shiftId
-            events += "Checked out: $shiftTitle (${assignment.id}) completed."
-        }
-
-        payouts.filter { it.status == "created" }.forEach { payout ->
-            events += "Payout created for assignment ${payout.assignmentId}."
-        }
-
-        payouts.filter { it.status == "released" }.forEach { payout ->
-            events += "Payout released for assignment ${payout.assignmentId}."
-        }
-
-        val soon = assignments.firstOrNull { assignment ->
-            if (assignment.productStatus !in setOf("assigned", "in_progress")) return@firstOrNull false
-            val shift = shiftById[assignment.shiftId] ?: return@firstOrNull false
-            val start = runCatching { Instant.parse(shift.startAt) }.getOrNull() ?: return@firstOrNull false
-            val minutes = Duration.between(Instant.now(), start).toMinutes()
-            minutes in 0..120
-        }
-        if (soon != null) {
-            val shiftTitle = shiftById[soon.shiftId]?.title ?: soon.shiftId
-            events += "Upcoming soon: $shiftTitle (${soon.id}) starts within 2 hours."
-        }
-
-        return events.distinct()
     }
 
     private fun showDashboardFailure(err: Throwable?, keepStatusMessage: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            errorMessage = err?.message ?: "Dashboard load failed",
-            statusMessage = if (keepStatusMessage) _uiState.value.statusMessage else null,
-            dashboardState = DashboardLoadState.ERROR
-        )
+        applyDerivedState(baseSessionState().copy(errorMessage = err?.message ?: "Dashboard load failed", statusMessage = if (keepStatusMessage) _uiState.value.statusMessage else null, loadState = UiLoadState.ERROR))
     }
+
+    private fun baseSessionState(): MainUiState = _uiState.value.copy(
+        role = UserRole.from(repository.currentRole()),
+        baseUrl = repository.baseUrl(),
+        hasSession = repository.currentSession() != null,
+        sessionUserId = repository.currentSession()?.userId
+    )
+
+    private fun applyDerivedState(candidate: MainUiState) {
+        _uiState.value = candidate.copy(capabilities = computeCapabilities(candidate))
+    }
+
+    private fun MainUiState.withSelections(shiftId: String? = null, assignmentId: String? = null, applicationId: String? = null): MainUiState = copy(
+        selectedShiftId = shiftId.normalizeSelection(selectedShiftId),
+        selectedAssignmentId = assignmentId.normalizeSelection(selectedAssignmentId),
+        selectedApplicationId = applicationId.normalizeSelection(selectedApplicationId)
+    )
+
+    private fun String?.normalizeSelection(current: String?): String? =
+        if (this == null) current else trim().ifBlank { null }
 
     class Factory(
         private val repository: MarketplaceRepository = ApiMarketplaceRepository(),

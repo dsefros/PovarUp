@@ -1,9 +1,11 @@
 package com.povarup
 
+import com.povarup.data.ApplicationDto
 import com.povarup.data.SessionDto
 import com.povarup.data.ShiftDto
-import com.povarup.data.ApplicationDto
 import com.povarup.data.toDomain
+import com.povarup.domain.ApplicationStatus
+import com.povarup.domain.ShiftStatus
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -24,13 +26,13 @@ class MapperTest {
         val model = dto.toDomain()
         assertEquals("biz_1", model.businessId)
         assertEquals(2500, model.payRateCents)
-        assertEquals("published", model.status)
+        assertEquals(ShiftStatus.PUBLISHED, model.status)
+        assertEquals("published", model.rawStatus)
     }
 
     @Test
     fun mapSessionDtoToDomain() {
         val dto = SessionDto(token = "sess_1", userId = "worker.demo", role = "worker")
-
         val model = dto.toDomain()
         assertEquals("sess_1", model.token)
         assertEquals("worker.demo", model.userId)
@@ -40,10 +42,9 @@ class MapperTest {
     @Test
     fun mapApplicationDtoToDomain() {
         val dto = ApplicationDto(id = "app_1", shiftId = "shift_1", workerId = "worker_1", status = "applied")
-
         val model = dto.toDomain()
         assertEquals("app_1", model.id)
         assertEquals("shift_1", model.shiftId)
-        assertEquals("applied", model.status)
+        assertEquals(ApplicationStatus.APPLIED, model.status)
     }
 }
