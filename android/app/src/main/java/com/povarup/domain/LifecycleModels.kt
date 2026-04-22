@@ -76,6 +76,25 @@ enum class AssignmentStatus {
     }
 }
 
+enum class PayoutStatus {
+    CREATED,
+    PENDING,
+    PAID,
+    FAILED,
+    UNKNOWN;
+
+    companion object {
+        fun from(raw: String?): PayoutStatus = when (raw?.lowercase()) {
+            "created" -> CREATED
+            "pending" -> PENDING
+            "paid" -> PAID
+            "failed" -> FAILED
+            "released" -> PAID
+            else -> UNKNOWN
+        }
+    }
+}
+
 data class ShiftCapability(
     val canApply: Boolean,
     val canPublish: Boolean,

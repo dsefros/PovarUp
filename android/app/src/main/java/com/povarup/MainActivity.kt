@@ -196,7 +196,7 @@ class MainActivity : AppCompatActivity() {
                 assignmentsBlock.text = home.content.assignments.joinToString("\n") { "• ${it.id}: shift=${it.shiftId} status=${it.rawStatus}" }.ifBlank { "No assignments yet." }
                 activeShiftBlock.text = home.content.activeAssignment?.let { "${it.shiftId} (${it.rawStatus})" } ?: "No active shift."
                 completedBlock.text = home.content.completedAssignments.joinToString("\n") { "• ${it.shiftId}: ${it.rawStatus}" }.ifBlank { "No completed shifts yet." }
-                payoutsBlock.text = home.content.payouts.joinToString("\n") { "• ${it.id}: assignment=${it.assignmentId} amount=${it.amountCents} status=${it.status}" }.ifBlank { "No payouts yet." }
+                payoutsBlock.text = home.content.payouts.joinToString("\n") { "• ${it.id}: assignment=${it.assignmentId} amount=${it.amountCents} status=${it.rawStatus} (${it.status})" }.ifBlank { "No payouts yet." }
                 businessShiftsBlock.text = "Sign in as a business user to view this section."
                 businessAppsBlock.text = businessShiftsBlock.text
                 businessAssignmentsBlock.text = businessShiftsBlock.text
@@ -235,7 +235,7 @@ class MainActivity : AppCompatActivity() {
                 businessAssignmentsBlock.text = bizPrompt
                 businessPayoutBlock.text = bizPrompt
                 adminAssignmentsBlock.text = home.content.assignments.joinToString("\n") { "• ${it.id}: worker=${it.workerId} status=${it.rawStatus}" }.ifBlank { "No assignments." }
-                adminPayoutsBlock.text = home.content.payouts.joinToString("\n") { "• ${it.id}: assignment=${it.assignmentId} status=${it.status}" }.ifBlank { "No payouts." }
+                adminPayoutsBlock.text = home.content.payouts.joinToString("\n") { "• ${it.id}: assignment=${it.assignmentId} status=${it.rawStatus} (${it.status})" }.ifBlank { "No payouts." }
                 adminProblemsBlock.text = "Flags=${home.content.problemCases.flags.size}, FailedPayouts=${home.content.problemCases.failedPayouts.size}, StalledAssignments=${home.content.problemCases.stalledAssignments.size}"
             }
             HomeState.None -> {

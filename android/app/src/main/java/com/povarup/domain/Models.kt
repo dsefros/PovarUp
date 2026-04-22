@@ -35,6 +35,7 @@ data class Payout(
     val assignmentId: String,
     val workerId: String,
     val amountCents: Int,
-    val status: String,
+    val status: PayoutStatus,
+    val rawStatus: String,
     val note: String? = null
 )

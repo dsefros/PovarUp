@@ -5,6 +5,7 @@ import com.povarup.domain.ApplicationStatus
 import com.povarup.domain.Assignment
 import com.povarup.domain.AssignmentStatus
 import com.povarup.domain.Payout
+import com.povarup.domain.PayoutStatus
 import com.povarup.domain.Shift
 import com.povarup.domain.ShiftStatus
 
@@ -49,11 +50,15 @@ fun AssignmentDto.toDomain(): Assignment {
     )
 }
 
-fun PayoutDto.toDomain(): Payout = Payout(
-    id = id,
-    assignmentId = assignmentId,
-    workerId = workerId,
-    amountCents = amountCents,
-    status = status,
-    note = note
-)
+fun PayoutDto.toDomain(): Payout {
+    val lifecycleStatus = internalStatus ?: status
+    return Payout(
+        id = id,
+        assignmentId = assignmentId,
+        workerId = workerId,
+        amountCents = amountCents,
+        status = PayoutStatus.from(lifecycleStatus),
+        rawStatus = lifecycleStatus,
+        note = note
+    )
+}

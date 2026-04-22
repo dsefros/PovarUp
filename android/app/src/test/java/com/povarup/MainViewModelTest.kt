@@ -14,6 +14,7 @@ import com.povarup.domain.ApplicationStatus
 import com.povarup.domain.Assignment
 import com.povarup.domain.AssignmentStatus
 import com.povarup.domain.Payout
+import com.povarup.domain.PayoutStatus
 import com.povarup.domain.Shift
 import com.povarup.domain.ShiftStatus
 import kotlinx.coroutines.Dispatchers
@@ -227,7 +228,7 @@ class MainViewModelTest {
         override fun releasePayout(assignmentId: String): Result<Payout> = Result.failure(Exception())
         override fun listMyPayouts(): Result<List<Payout>> {
             listPayoutCalls += 1
-            return payoutsFailure?.let { Result.failure(it) } ?: Result.success(listOf(Payout("pay_1", "asn_1", "worker_1", 1000, "created")))
+            return payoutsFailure?.let { Result.failure(it) } ?: Result.success(listOf(Payout("pay_1", "asn_1", "worker_1", 1000, PayoutStatus.CREATED, "created")))
         }
         override fun listAdminAssignments(): Result<List<Assignment>> = Result.success(emptyList())
         override fun listAdminPayouts(): Result<List<Payout>> = Result.success(emptyList())
