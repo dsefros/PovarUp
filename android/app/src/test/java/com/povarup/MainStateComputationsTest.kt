@@ -6,11 +6,13 @@ import com.povarup.core.HomeState
 import com.povarup.core.MainUiState
 import com.povarup.core.buildHomeState
 import com.povarup.core.computeCapabilities
+import com.povarup.core.deriveImportantEvents
 import com.povarup.domain.Application
 import com.povarup.domain.ApplicationStatus
 import com.povarup.domain.Assignment
 import com.povarup.domain.AssignmentStatus
 import com.povarup.domain.Payout
+import com.povarup.domain.PayoutStatus
 import com.povarup.domain.Shift
 import com.povarup.domain.ShiftStatus
 import com.povarup.domain.UserRole
@@ -103,11 +105,30 @@ class MainStateComputationsTest {
             assignments = emptyList(),
             payouts = emptyList(),
             adminAssignments = listOf(Assignment("a1", "s", "w", "b", AssignmentStatus.ASSIGNED, "assigned", 1000)),
-            adminPayouts = listOf(Payout("p1", "a1", "w", 1000, "created")),
+            adminPayouts = listOf(Payout("p1", "a1", "w", 1000, PayoutStatus.CREATED, "created")),
             adminProblemCases = com.povarup.data.ProblemCasesDto()
         )
 
         val home = buildHomeState(snapshot)
         assertTrue(home is HomeState.Admin)
+    }
+
+    @Test
+    fun importantEventsUseTypedPayoutStatusLifecycle() {
+        val events = deriveImportantEvents(
+            shifts = emptyList(),
+            assignments = emptyList(),
+            payouts = listOf(
+                Payout("p1", "a1", "w", 1000, PayoutStatus.CREATED, "created"),
+                Payout("p2", "a2", "w", 1000, PayoutStatus.PENDING, "pending"),
+                Payout("p3", "a3", "w", 1000, PayoutStatus.PAID, "paid"),
+                Payout("p4", "a4", "w", 1000, PayoutStatus.FAILED, "failed")
+            )
+        )
+
+        assertTrue(events.contains("Payout created for assignment a1."))
+        assertTrue(events.contains("Payout pending for assignment a2."))
+        assertTrue(events.contains("Payout paid for assignment a3."))
+        assertTrue(events.contains("Payout failed for assignment a4."))
     }
 }

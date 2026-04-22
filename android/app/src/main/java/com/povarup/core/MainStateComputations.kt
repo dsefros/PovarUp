@@ -6,6 +6,7 @@ import com.povarup.domain.ApplicationStatus
 import com.povarup.domain.Assignment
 import com.povarup.domain.AssignmentStatus
 import com.povarup.domain.Payout
+import com.povarup.domain.PayoutStatus
 import com.povarup.domain.Shift
 import com.povarup.domain.UserRole
 import com.povarup.domain.capability
@@ -58,8 +59,10 @@ fun deriveImportantEvents(shifts: List<Shift>, assignments: List<Assignment>, pa
     assignments.filter { it.status == AssignmentStatus.COMPLETED || it.status == AssignmentStatus.PAID }
         .forEach { events += "Checked out: ${shiftById[it.shiftId]?.title ?: it.shiftId} (${it.id}) completed." }
 
-    payouts.filter { it.status == "created" }.forEach { events += "Payout created for assignment ${it.assignmentId}." }
-    payouts.filter { it.status == "released" }.forEach { events += "Payout released for assignment ${it.assignmentId}." }
+    payouts.filter { it.status == PayoutStatus.CREATED }.forEach { events += "Payout created for assignment ${it.assignmentId}." }
+    payouts.filter { it.status == PayoutStatus.PENDING }.forEach { events += "Payout pending for assignment ${it.assignmentId}." }
+    payouts.filter { it.status == PayoutStatus.PAID }.forEach { events += "Payout paid for assignment ${it.assignmentId}." }
+    payouts.filter { it.status == PayoutStatus.FAILED }.forEach { events += "Payout failed for assignment ${it.assignmentId}." }
 
     val soon = assignments.firstOrNull { assignment ->
         if (assignment.status !in setOf(AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS)) return@firstOrNull false

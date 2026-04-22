@@ -1,10 +1,12 @@
 package com.povarup
 
 import com.povarup.data.ApplicationDto
+import com.povarup.data.PayoutDto
 import com.povarup.data.SessionDto
 import com.povarup.data.ShiftDto
 import com.povarup.data.toDomain
 import com.povarup.domain.ApplicationStatus
+import com.povarup.domain.PayoutStatus
 import com.povarup.domain.ShiftStatus
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -46,5 +48,37 @@ class MapperTest {
         assertEquals("app_1", model.id)
         assertEquals("shift_1", model.shiftId)
         assertEquals(ApplicationStatus.APPLIED, model.status)
+    }
+
+    @Test
+    fun mapPayoutDtoToDomainWithCurrentLifecycleStatus() {
+        val dto = PayoutDto(
+            id = "pay_1",
+            assignmentId = "asn_1",
+            workerId = "worker_1",
+            amountCents = 1200,
+            status = "pending",
+            createdAt = "2026-04-08T10:00:00Z"
+        )
+
+        val model = dto.toDomain()
+        assertEquals(PayoutStatus.PENDING, model.status)
+        assertEquals("pending", model.rawStatus)
+    }
+
+    @Test
+    fun mapPayoutDtoToDomainMapsLegacyReleasedToPaid() {
+        val dto = PayoutDto(
+            id = "pay_legacy",
+            assignmentId = "asn_legacy",
+            workerId = "worker_1",
+            amountCents = 1200,
+            status = "released",
+            createdAt = "2026-04-08T10:00:00Z"
+        )
+
+        val model = dto.toDomain()
+        assertEquals(PayoutStatus.PAID, model.status)
+        assertEquals("released", model.rawStatus)
     }
 }
