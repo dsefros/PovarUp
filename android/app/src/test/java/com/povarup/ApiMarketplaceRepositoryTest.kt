@@ -2,6 +2,7 @@ package com.povarup
 
 import com.povarup.data.*
 import org.junit.Assert.assertEquals
+import com.povarup.domain.ApplicationStatus
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,7 +76,7 @@ class ApiMarketplaceRepositoryTest {
         val result = repo.applyToShift("shift_9")
 
         assertTrue(result.isSuccess)
-        assertEquals("applied", result.getOrThrow().status)
+        assertEquals(ApplicationStatus.APPLIED, result.getOrThrow().status)
     }
 
     @Test

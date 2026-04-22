@@ -8,16 +8,16 @@ data class Shift(
     val startAt: String,
     val endAt: String,
     val payRateCents: Int,
-    val status: String,
-    val productStatus: String = status
+    val status: ShiftStatus,
+    val rawStatus: String
 )
 
 data class Application(
     val id: String,
     val shiftId: String,
     val workerId: String,
-    val status: String,
-    val productStatus: String = status
+    val status: ApplicationStatus,
+    val rawStatus: String
 )
 
 data class Assignment(
@@ -25,8 +25,8 @@ data class Assignment(
     val shiftId: String,
     val workerId: String,
     val businessId: String,
-    val status: String,
-    val productStatus: String = status,
+    val status: AssignmentStatus,
+    val rawStatus: String,
     val escrowLockedCents: Int
 )
 
