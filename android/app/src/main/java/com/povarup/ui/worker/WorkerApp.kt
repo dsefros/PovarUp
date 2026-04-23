@@ -31,6 +31,7 @@ fun WorkerApp(
                     onUserIdChanged = viewModel::onUserIdChanged,
                     onPasswordChanged = viewModel::onPasswordChanged,
                     onLogin = viewModel::login,
+                    onContinueAsDemoWorker = viewModel::continueAsDemoWorker,
                     onOpenLegacyDashboard = onOpenLegacyDashboard
                 )
 

@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.povarup.data.ApiMarketplaceRepository
+import com.povarup.data.DemoMarketplaceRepository
 import com.povarup.data.MarketplaceRepository
+import com.povarup.data.WorkerDataSourceMode
+import com.povarup.data.WorkerModeSelectable
 import com.povarup.domain.Shift
 import com.povarup.domain.UserRole
 import com.povarup.domain.capability
@@ -72,38 +75,54 @@ class WorkerViewModel(
         _uiState.update { it.copy(loginForm = it.loginForm.copy(password = value), errorMessage = null) }
     }
 
-    fun login() {
-        val form = _uiState.value.loginForm
-        if (!form.isValid || _uiState.value.isLoggingIn) return
+    fun continueAsDemoWorker() {
+        if (_uiState.value.isLoggingIn) return
+        (repository as? WorkerModeSelectable)?.selectMode(WorkerDataSourceMode.DEMO)
         _uiState.update { it.copy(isLoggingIn = true, errorMessage = null, infoMessage = null) }
 
         viewModelScope.launch(dispatchers.io) {
-            val result = repository.login(form.userId.trim(), form.password.trim())
-            if (result.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        isLoggingIn = false,
-                        isLoggedIn = false,
-                        errorMessage = result.exceptionOrNull()?.message ?: "Login failed"
-                    )
-                }
-                return@launch
-            }
-
-            if (UserRole.from(repository.currentRole()) != UserRole.WORKER) {
-                repository.logout()
-                _uiState.update {
-                    it.copy(
-                        isLoggingIn = false,
-                        isLoggedIn = false,
-                        errorMessage = "This app flow currently supports worker accounts only."
-                    )
-                }
-                return@launch
-            }
-
-            loadShifts(showFullScreenLoader = true)
+            performLogin(DemoMarketplaceRepository.DEMO_USER_ID, DemoMarketplaceRepository.DEMO_PASSWORD)
         }
+    }
+
+    fun login() {
+        val form = _uiState.value.loginForm
+        if (!form.isValid || _uiState.value.isLoggingIn) return
+        (repository as? WorkerModeSelectable)?.selectMode(WorkerDataSourceMode.REAL)
+        _uiState.update { it.copy(isLoggingIn = true, errorMessage = null, infoMessage = null) }
+
+        viewModelScope.launch(dispatchers.io) {
+            performLogin(form.userId.trim(), form.password.trim())
+        }
+    }
+
+
+    private fun performLogin(userId: String, password: String) {
+        val result = repository.login(userId, password)
+        if (result.isFailure) {
+            _uiState.update {
+                it.copy(
+                    isLoggingIn = false,
+                    isLoggedIn = false,
+                    errorMessage = result.exceptionOrNull()?.message ?: "Login failed"
+                )
+            }
+            return
+        }
+
+        if (UserRole.from(repository.currentRole()) != UserRole.WORKER) {
+            repository.logout()
+            _uiState.update {
+                it.copy(
+                    isLoggingIn = false,
+                    isLoggedIn = false,
+                    errorMessage = "This app flow currently supports worker accounts only."
+                )
+            }
+            return
+        }
+
+        loadShifts(showFullScreenLoader = true)
     }
 
     fun refresh() {

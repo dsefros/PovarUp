@@ -22,6 +22,7 @@ fun LoginScreen(
     onUserIdChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onLogin: () -> Unit,
+    onContinueAsDemoWorker: () -> Unit,
     onOpenLegacyDashboard: () -> Unit
 ) {
     Column(
@@ -64,6 +65,17 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (state.isLoggingIn) "Signing in..." else "Login")
+                }
+                Text(
+                    text = "Demo login: worker.demo / workerpass",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Button(
+                    onClick = onContinueAsDemoWorker,
+                    enabled = !state.isLoggingIn,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Continue as Demo Worker")
                 }
                 Text(
                     text = "Business/admin? Use legacy dashboard.",
