@@ -6,6 +6,9 @@
       android:supportsRtl="true"
       android:theme="@style/Theme.PovarUp">
     <activity
+        android:name=".LegacyDashboardActivity"
+        android:exported="false" />
+    <activity
         android:name=".MainActivity"
         android:exported="true">
       <intent-filter>
