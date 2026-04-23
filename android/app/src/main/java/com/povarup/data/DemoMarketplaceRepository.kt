@@ -3,10 +3,14 @@ package com.povarup.data
 import com.povarup.domain.Application
 import com.povarup.domain.ApplicationStatus
 import com.povarup.domain.Assignment
+import com.povarup.domain.CookCuisine
+import com.povarup.domain.CookStation
+import com.povarup.domain.DishwasherZone
 import com.povarup.domain.Payout
 import com.povarup.domain.Shift
 import com.povarup.domain.ShiftStatus
 import com.povarup.domain.UserRole
+import com.povarup.domain.WorkType
 
 class DemoMarketplaceRepository(
     private val sessionStore: SessionStore = InMemorySessionStore()
@@ -155,47 +159,141 @@ class DemoMarketplaceRepository(
         private val DEMO_SHIFTS = listOf(
             Shift(
                 id = "demo-shift-1",
-                businessId = "biz-brooklyn-bistro",
-                locationId = "Brooklyn Bistro · Downtown",
-                title = "Prep Cook",
-                startAt = "2026-05-10 08:00",
-                endAt = "2026-05-10 14:00",
-                payRateCents = 2200,
+                businessId = "biz-nevsky-garden",
+                locationId = "Nevsky Garden · Manhattan",
+                title = "Banquet Head Cook",
+                startAt = "2026-05-10 10:00",
+                endAt = "2026-05-10 18:00",
+                payRateCents = 3400,
                 status = ShiftStatus.PUBLISHED,
-                rawStatus = "published"
+                rawStatus = "published",
+                workType = WorkType.COOK,
+                cookCuisine = CookCuisine.RUSSIAN,
+                cookStation = CookStation.HOT,
+                isBanquet = true
             ),
             Shift(
                 id = "demo-shift-2",
-                businessId = "biz-harbor-grill",
-                locationId = "Harbor Grill · Pier 3",
-                title = "Line Cook",
-                startAt = "2026-05-11 15:00",
-                endAt = "2026-05-11 22:00",
-                payRateCents = 2600,
+                businessId = "biz-nevsky-garden",
+                locationId = "Nevsky Garden · Manhattan",
+                title = "Garde Manger Cook",
+                startAt = "2026-05-11 08:00",
+                endAt = "2026-05-11 15:00",
+                payRateCents = 2800,
                 status = ShiftStatus.PUBLISHED,
-                rawStatus = "published"
+                rawStatus = "published",
+                workType = WorkType.COOK,
+                cookCuisine = CookCuisine.RUSSIAN,
+                cookStation = CookStation.COLD,
+                isBanquet = false
             ),
             Shift(
                 id = "demo-shift-3",
-                businessId = "biz-market-table",
-                locationId = "Market Table · Midtown",
-                title = "Dishwasher",
-                startAt = "2026-05-12 09:00",
-                endAt = "2026-05-12 15:00",
-                payRateCents = 1900,
-                status = ShiftStatus.CLOSED,
-                rawStatus = "closed"
+                businessId = "biz-belle-epoque",
+                locationId = "Belle Époque · SoHo",
+                title = "French Kitchen Cook",
+                startAt = "2026-05-12 12:00",
+                endAt = "2026-05-12 20:00",
+                payRateCents = 3100,
+                status = ShiftStatus.PUBLISHED,
+                rawStatus = "published",
+                workType = WorkType.COOK,
+                cookCuisine = CookCuisine.FRENCH,
+                cookStation = CookStation.UNIVERSAL,
+                isBanquet = false
             ),
             Shift(
                 id = "demo-shift-4",
-                businessId = "biz-sunset-kitchen",
-                locationId = "Sunset Kitchen · West End",
-                title = "Grill Cook",
-                startAt = "2026-05-13 16:00",
-                endAt = "2026-05-13 23:00",
-                payRateCents = 2800,
+                businessId = "biz-trattoria-via",
+                locationId = "Trattoria Via Roma · Brooklyn",
+                title = "Hot Line Italian Cook",
+                startAt = "2026-05-13 14:00",
+                endAt = "2026-05-13 22:00",
+                payRateCents = 2950,
                 status = ShiftStatus.PUBLISHED,
-                rawStatus = "published"
+                rawStatus = "published",
+                workType = WorkType.COOK,
+                cookCuisine = CookCuisine.ITALIAN,
+                cookStation = CookStation.HOT,
+                isBanquet = false
+            ),
+            Shift(
+                id = "demo-shift-5",
+                businessId = "biz-harbor-club",
+                locationId = "Harbor Club · Pier 7",
+                title = "Floor Waiter",
+                startAt = "2026-05-14 11:00",
+                endAt = "2026-05-14 19:00",
+                payRateCents = 2300,
+                status = ShiftStatus.PUBLISHED,
+                rawStatus = "published",
+                workType = WorkType.WAITER,
+                isBanquet = false
+            ),
+            Shift(
+                id = "demo-shift-6",
+                businessId = "biz-harbor-club",
+                locationId = "Harbor Club · Pier 7",
+                title = "Banquet Waiter",
+                startAt = "2026-05-15 16:00",
+                endAt = "2026-05-15 23:30",
+                payRateCents = 2600,
+                status = ShiftStatus.PUBLISHED,
+                rawStatus = "published",
+                workType = WorkType.WAITER,
+                isBanquet = true
+            ),
+            Shift(
+                id = "demo-shift-7",
+                businessId = "biz-velvet-lounge",
+                locationId = "Velvet Lounge · Midtown",
+                title = "Service Bartender",
+                startAt = "2026-05-16 17:00",
+                endAt = "2026-05-17 01:00",
+                payRateCents = 3000,
+                status = ShiftStatus.PUBLISHED,
+                rawStatus = "published",
+                workType = WorkType.BARTENDER,
+                isBanquet = false
+            ),
+            Shift(
+                id = "demo-shift-8",
+                businessId = "biz-velvet-lounge",
+                locationId = "Velvet Lounge · Midtown",
+                title = "Banquet Bar Bartender",
+                startAt = "2026-05-17 15:00",
+                endAt = "2026-05-17 23:00",
+                payRateCents = 3200,
+                status = ShiftStatus.PUBLISHED,
+                rawStatus = "published",
+                workType = WorkType.BARTENDER,
+                isBanquet = true
+            ),
+            Shift(
+                id = "demo-shift-9",
+                businessId = "biz-city-hotel",
+                locationId = "City Hotel Kitchen · Uptown",
+                title = "Dishwasher (White Zone)",
+                startAt = "2026-05-18 07:00",
+                endAt = "2026-05-18 15:00",
+                payRateCents = 2000,
+                status = ShiftStatus.PUBLISHED,
+                rawStatus = "published",
+                workType = WorkType.DISHWASHER,
+                dishwasherZone = DishwasherZone.WHITE
+            ),
+            Shift(
+                id = "demo-shift-10",
+                businessId = "biz-city-hotel",
+                locationId = "City Hotel Kitchen · Uptown",
+                title = "Dishwasher (Black Zone)",
+                startAt = "2026-05-18 15:00",
+                endAt = "2026-05-18 23:00",
+                payRateCents = 2100,
+                status = ShiftStatus.PUBLISHED,
+                rawStatus = "published",
+                workType = WorkType.DISHWASHER,
+                dishwasherZone = DishwasherZone.BLACK
             )
         )
     }

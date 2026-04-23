@@ -1,5 +1,29 @@
 package com.povarup.domain
 
+enum class WorkType {
+    COOK,
+    WAITER,
+    BARTENDER,
+    DISHWASHER
+}
+
+enum class CookCuisine {
+    RUSSIAN,
+    FRENCH,
+    ITALIAN
+}
+
+enum class CookStation {
+    HOT,
+    COLD,
+    UNIVERSAL
+}
+
+enum class DishwasherZone {
+    WHITE,
+    BLACK
+}
+
 data class Shift(
     val id: String,
     val businessId: String,
@@ -9,7 +33,12 @@ data class Shift(
     val endAt: String,
     val payRateCents: Int,
     val status: ShiftStatus,
-    val rawStatus: String
+    val rawStatus: String,
+    val workType: WorkType? = null,
+    val cookCuisine: CookCuisine? = null,
+    val cookStation: CookStation? = null,
+    val isBanquet: Boolean? = null,
+    val dishwasherZone: DishwasherZone? = null
 )
 
 data class Application(

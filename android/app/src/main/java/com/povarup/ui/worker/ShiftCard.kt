@@ -27,6 +27,9 @@ fun ShiftCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(text = shift.title, style = MaterialTheme.typography.titleMedium)
+            shift.workTypeDetails?.let {
+                Text(text = it, style = MaterialTheme.typography.bodyMedium)
+            }
             Text(text = shift.dateTimeLabel)
             Text(text = shift.locationLabel)
             Text(text = shift.payLabel)
