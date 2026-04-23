@@ -23,6 +23,7 @@ fun LoginScreen(
     onPasswordChanged: (String) -> Unit,
     onLogin: () -> Unit,
     onContinueAsDemoWorker: () -> Unit,
+    onContinueAsDemoBusiness: () -> Unit,
     onOpenLegacyDashboard: () -> Unit
 ) {
     Column(
@@ -38,7 +39,9 @@ fun LoginScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(text = "Worker Login", style = MaterialTheme.typography.headlineSmall)
+                Text(text = "Welcome", style = MaterialTheme.typography.headlineSmall)
+
+                Text(text = "Real access", style = MaterialTheme.typography.titleSmall)
                 OutlinedTextField(
                     value = state.loginForm.userId,
                     onValueChange = onUserIdChanged,
@@ -64,10 +67,12 @@ fun LoginScreen(
                     enabled = state.loginForm.isValid && !state.isLoggingIn,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (state.isLoggingIn) "Signing in..." else "Login")
+                    Text(if (state.isLoggingIn) "Signing in..." else "Sign in")
                 }
+
+                Text(text = "Demo access", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    text = "Demo login: worker.demo / workerpass",
+                    text = "Demo mode is for current-session product walkthroughs and does not affect real account data.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Button(
@@ -77,8 +82,17 @@ fun LoginScreen(
                 ) {
                     Text("Continue as Demo Worker")
                 }
+                Button(
+                    onClick = onContinueAsDemoBusiness,
+                    enabled = !state.isLoggingIn,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Continue as Demo Business")
+                }
+
+                Text(text = "Internal / legacy", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    text = "Business/admin? Use legacy dashboard.",
+                    text = "Business/admin legacy access for internal workflows.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Button(
@@ -87,7 +101,6 @@ fun LoginScreen(
                 ) {
                     Text("Open Legacy Dashboard")
                 }
-
             }
         }
     }

@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import com.povarup.core.BusinessDemoViewModel
 import com.povarup.core.WorkerViewModel
 import com.povarup.data.ApiMarketplaceRepository
 import com.povarup.data.DemoMarketplaceRepository
@@ -27,6 +28,10 @@ class MainActivity : ComponentActivity() {
         WorkerViewModel.Factory(repository = repository)
     }
 
+    private val businessDemoViewModel: BusinessDemoViewModel by viewModels {
+        BusinessDemoViewModel.Factory()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (shouldOpenLegacy(repository.currentSession() != null, repository.currentRole())) {
@@ -36,6 +41,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             WorkerApp(
                 viewModel = viewModel,
+                businessDemoViewModel = businessDemoViewModel,
                 onOpenLegacyDashboard = ::openLegacyDashboard
             )
         }
