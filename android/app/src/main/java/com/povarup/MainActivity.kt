@@ -6,13 +6,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.povarup.core.BusinessDemoViewModel
+import com.povarup.core.RootViewModel
 import com.povarup.core.WorkerViewModel
 import com.povarup.data.ApiMarketplaceRepository
 import com.povarup.data.DemoMarketplaceRepository
 import com.povarup.data.SharedPreferencesSessionStore
 import com.povarup.data.WorkerRepositorySelector
 import com.povarup.domain.UserRole
-import com.povarup.ui.worker.WorkerApp
+import com.povarup.ui.worker.PovarUpApp
 
 class MainActivity : ComponentActivity() {
     private val sessionStore by lazy { SharedPreferencesSessionStore(applicationContext) }
@@ -32,6 +33,8 @@ class MainActivity : ComponentActivity() {
         BusinessDemoViewModel.Factory()
     }
 
+    private val rootViewModel: RootViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (shouldOpenLegacy(repository.currentSession() != null, repository.currentRole())) {
@@ -39,9 +42,10 @@ class MainActivity : ComponentActivity() {
             return
         }
         setContent {
-            WorkerApp(
+            PovarUpApp(
                 viewModel = viewModel,
                 businessDemoViewModel = businessDemoViewModel,
+                rootViewModel = rootViewModel,
                 onOpenLegacyDashboard = ::openLegacyDashboard
             )
         }

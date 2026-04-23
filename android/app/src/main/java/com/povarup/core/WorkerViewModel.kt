@@ -10,8 +10,8 @@ import com.povarup.data.WorkerDataSourceMode
 import com.povarup.data.WorkerModeSelectable
 import com.povarup.domain.Shift
 import com.povarup.domain.UserRole
-import com.povarup.domain.workTypeDescription
 import com.povarup.domain.capability
+import com.povarup.domain.workTypeDescription
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,8 +49,7 @@ data class WorkerUiState(
     val isLoadingShifts: Boolean = false,
     val loginForm: LoginFormState = LoginFormState(),
     val shifts: List<ShiftCardUiModel> = emptyList(),
-    val errorMessage: String? = null,
-    val infoMessage: String? = null,
+    val message: UiMessage? = null,
     val hasLoadedAtLeastOnce: Boolean = false
 )
 
@@ -70,17 +69,17 @@ class WorkerViewModel(
     }
 
     fun onUserIdChanged(value: String) {
-        _uiState.update { it.copy(loginForm = it.loginForm.copy(userId = value), errorMessage = null) }
+        _uiState.update { it.copy(loginForm = it.loginForm.copy(userId = value), message = null) }
     }
 
     fun onPasswordChanged(value: String) {
-        _uiState.update { it.copy(loginForm = it.loginForm.copy(password = value), errorMessage = null) }
+        _uiState.update { it.copy(loginForm = it.loginForm.copy(password = value), message = null) }
     }
 
     fun continueAsDemoWorker() {
         if (_uiState.value.isLoggingIn) return
         (repository as? WorkerModeSelectable)?.selectMode(WorkerDataSourceMode.DEMO)
-        _uiState.update { it.copy(isLoggingIn = true, errorMessage = null, infoMessage = null) }
+        _uiState.update { it.copy(isLoggingIn = true, message = null) }
 
         viewModelScope.launch(dispatchers.io) {
             performLogin(DemoMarketplaceRepository.DEMO_USER_ID, DemoMarketplaceRepository.DEMO_PASSWORD)
@@ -91,13 +90,12 @@ class WorkerViewModel(
         val form = _uiState.value.loginForm
         if (!form.isValid || _uiState.value.isLoggingIn) return
         (repository as? WorkerModeSelectable)?.selectMode(WorkerDataSourceMode.REAL)
-        _uiState.update { it.copy(isLoggingIn = true, errorMessage = null, infoMessage = null) }
+        _uiState.update { it.copy(isLoggingIn = true, message = null) }
 
         viewModelScope.launch(dispatchers.io) {
             performLogin(form.userId.trim(), form.password.trim())
         }
     }
-
 
     private fun performLogin(userId: String, password: String) {
         val result = repository.login(userId, password)
@@ -106,7 +104,7 @@ class WorkerViewModel(
                 it.copy(
                     isLoggingIn = false,
                     isLoggedIn = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "Login failed"
+                    message = UiMessage(result.exceptionOrNull()?.message ?: "Login failed", UiMessageKind.ERROR)
                 )
             }
             return
@@ -118,7 +116,7 @@ class WorkerViewModel(
                 it.copy(
                     isLoggingIn = false,
                     isLoggedIn = false,
-                    errorMessage = "This app flow currently supports worker accounts only."
+                    message = UiMessage("This app flow currently supports worker accounts only.", UiMessageKind.ERROR)
                 )
             }
             return
@@ -137,23 +135,28 @@ class WorkerViewModel(
     fun applyToShift(shiftId: String) {
         if (!_uiState.value.isLoggedIn || applyingShiftIds.contains(shiftId)) return
         applyingShiftIds += shiftId
-        emitShiftModels(errorMessage = null)
+        emitShiftModels()
 
         viewModelScope.launch(dispatchers.io) {
             val result = repository.applyToShift(shiftId)
             if (result.isFailure) {
                 applyingShiftIds -= shiftId
-                emitShiftModels(errorMessage = result.exceptionOrNull()?.message ?: "Could not apply to shift")
+                emitShiftModels(
+                    message = UiMessage(
+                        result.exceptionOrNull()?.message ?: "Could not apply to shift",
+                        UiMessageKind.ERROR
+                    )
+                )
                 return@launch
             }
 
             applyingShiftIds -= shiftId
-            loadShifts(showFullScreenLoader = false, infoMessage = "Application submitted")
+            loadShifts(showFullScreenLoader = false, message = UiMessage("Application submitted", UiMessageKind.INFO))
         }
     }
 
-    fun dismissError() {
-        _uiState.update { it.copy(errorMessage = null) }
+    fun dismissMessage() {
+        _uiState.update { it.copy(message = null) }
     }
 
     fun logout() {
@@ -176,15 +179,14 @@ class WorkerViewModel(
         }
     }
 
-    private fun loadShifts(showFullScreenLoader: Boolean, infoMessage: String? = null) {
+    private fun loadShifts(showFullScreenLoader: Boolean, message: UiMessage? = null) {
         _uiState.update {
             it.copy(
                 isSessionRestoring = false,
                 isLoggedIn = true,
                 isLoggingIn = false,
                 isLoadingShifts = true,
-                errorMessage = null,
-                infoMessage = infoMessage,
+                message = message,
                 hasLoadedAtLeastOnce = it.hasLoadedAtLeastOnce || !showFullScreenLoader
             )
         }
@@ -195,7 +197,7 @@ class WorkerViewModel(
                 it.copy(
                     isLoggingIn = false,
                     isLoadingShifts = false,
-                    errorMessage = shiftsResult.exceptionOrNull()?.message ?: "Failed to load shifts"
+                    message = UiMessage(shiftsResult.exceptionOrNull()?.message ?: "Failed to load shifts", UiMessageKind.ERROR)
                 )
             }
             return
@@ -207,7 +209,7 @@ class WorkerViewModel(
                 it.copy(
                     isLoggingIn = false,
                     isLoadingShifts = false,
-                    errorMessage = applicationsResult.exceptionOrNull()?.message ?: "Failed to load applications"
+                    message = UiMessage(applicationsResult.exceptionOrNull()?.message ?: "Failed to load applications", UiMessageKind.ERROR)
                 )
             }
             return
@@ -219,7 +221,7 @@ class WorkerViewModel(
                 it.copy(
                     isLoggingIn = false,
                     isLoadingShifts = false,
-                    errorMessage = assignmentsResult.exceptionOrNull()?.message ?: "Failed to load assignments"
+                    message = UiMessage(assignmentsResult.exceptionOrNull()?.message ?: "Failed to load assignments", UiMessageKind.ERROR)
                 )
             }
             return
@@ -239,11 +241,11 @@ class WorkerViewModel(
         }
     }
 
-    private fun emitShiftModels(errorMessage: String?) {
+    private fun emitShiftModels(message: UiMessage? = null) {
         _uiState.update {
             it.copy(
                 shifts = latestShifts.toUiModels(latestRelatedShiftIds, applyingShiftIds),
-                errorMessage = errorMessage
+                message = message
             )
         }
     }

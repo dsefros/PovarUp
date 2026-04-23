@@ -43,8 +43,7 @@ data class BusinessDemoUiState(
     val form: BusinessShiftFormState = BusinessShiftFormState(),
     val shifts: List<BusinessShiftCardUiModel> = emptyList(),
     val selectedShift: Shift? = null,
-    val errorMessage: String? = null,
-    val infoMessage: String? = null
+    val message: UiMessage? = null
 )
 
 class BusinessDemoViewModel(
@@ -57,7 +56,12 @@ class BusinessDemoViewModel(
     fun enterDemoBusiness() {
         repository.enterDemoBusiness()
         refreshShifts()
-        _uiState.update { it.copy(isInDemoSession = true, errorMessage = null, infoMessage = "Demo business mode enabled") }
+        _uiState.update {
+            it.copy(
+                isInDemoSession = true,
+                message = UiMessage("Demo business mode enabled", UiMessageKind.INFO)
+            )
+        }
     }
 
     fun onTitleChanged(value: String) = updateForm { copy(title = value) }
@@ -75,7 +79,7 @@ class BusinessDemoViewModel(
         val form = _uiState.value.form
         val payCents = (form.payRatePerHour.toDoubleOrNull()?.times(100))?.toInt()
             ?: run {
-                _uiState.update { it.copy(errorMessage = "Pay must be a valid number") }
+                _uiState.update { it.copy(message = UiMessage("Pay must be a valid number", UiMessageKind.ERROR)) }
                 return
             }
 
@@ -94,7 +98,11 @@ class BusinessDemoViewModel(
 
         val result = repository.createShift(request)
         if (result.isFailure) {
-            _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message ?: "Failed to create shift") }
+            _uiState.update {
+                it.copy(
+                    message = UiMessage(result.exceptionOrNull()?.message ?: "Failed to create shift", UiMessageKind.ERROR)
+                )
+            }
             return
         }
 
@@ -102,8 +110,7 @@ class BusinessDemoViewModel(
         _uiState.update {
             it.copy(
                 form = it.form.copy(title = "", payRatePerHour = ""),
-                errorMessage = null,
-                infoMessage = "Shift created"
+                message = UiMessage("Shift created", UiMessageKind.INFO)
             )
         }
     }
@@ -113,7 +120,7 @@ class BusinessDemoViewModel(
         _uiState.update {
             it.copy(
                 selectedShift = result.getOrNull(),
-                errorMessage = result.exceptionOrNull()?.message
+                message = result.exceptionOrNull()?.message?.let { text -> UiMessage(text, UiMessageKind.ERROR) }
             )
         }
     }
@@ -122,8 +129,8 @@ class BusinessDemoViewModel(
         _uiState.update { it.copy(selectedShift = null) }
     }
 
-    fun dismissError() {
-        _uiState.update { it.copy(errorMessage = null) }
+    fun dismissMessage() {
+        _uiState.update { it.copy(message = null) }
     }
 
     private fun refreshShifts() {
@@ -141,13 +148,13 @@ class BusinessDemoViewModel(
                         statusLabel = shift.rawStatus.replaceFirstChar { c -> c.uppercase() }
                     )
                 },
-                errorMessage = result.exceptionOrNull()?.message
+                message = result.exceptionOrNull()?.message?.let { text -> UiMessage(text, UiMessageKind.ERROR) }
             )
         }
     }
 
     private fun updateForm(update: BusinessShiftFormState.() -> BusinessShiftFormState) {
-        _uiState.update { it.copy(form = it.form.update(), errorMessage = null) }
+        _uiState.update { it.copy(form = it.form.update(), message = null) }
     }
 
     class Factory(

@@ -40,64 +40,150 @@ fun BusinessShiftForm(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Create shift", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(form.title, onTitleChanged, modifier = Modifier.fillMaxWidth(), label = { Text("Title") })
-            OutlinedTextField(form.location, onLocationChanged, modifier = Modifier.fillMaxWidth(), label = { Text("Location") })
-            OutlinedTextField(form.startAt, onStartAtChanged, modifier = Modifier.fillMaxWidth(), label = { Text("Start time") }, placeholder = { Text("2026-05-10 10:00") })
-            OutlinedTextField(form.endAt, onEndAtChanged, modifier = Modifier.fillMaxWidth(), label = { Text("End time") }, placeholder = { Text("2026-05-10 18:00") })
-            OutlinedTextField(form.payRatePerHour, onPayChanged, modifier = Modifier.fillMaxWidth(), label = { Text("Pay / hour (USD)") }, placeholder = { Text("25.00") })
-
-            Text("Work type", style = MaterialTheme.typography.labelLarge)
-            ChipRow(options = WorkType.entries.map { it.name }, selected = form.workType.name) {
-                onWorkTypeChanged(WorkType.valueOf(it))
+            SectionCard(title = "Shift basics") {
+                OutlinedTextField(form.title, onTitleChanged, modifier = Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(form.location, onLocationChanged, modifier = Modifier.fillMaxWidth(), label = { Text("Location") }, singleLine = true)
+                OutlinedTextField(
+                    form.startAt,
+                    onStartAtChanged,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Start time") },
+                    placeholder = { Text("2026-05-10 10:00") },
+                    supportingText = { Text("Format: YYYY-MM-DD HH:mm") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    form.endAt,
+                    onEndAtChanged,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("End time") },
+                    placeholder = { Text("2026-05-10 18:00") },
+                    supportingText = { Text("Format: YYYY-MM-DD HH:mm") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    form.payRatePerHour,
+                    onPayChanged,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Pay / hour (USD)") },
+                    placeholder = { Text("25.00") },
+                    singleLine = true
+                )
             }
 
-            when (form.workType) {
-                WorkType.COOK -> {
-                    Text("Cuisine", style = MaterialTheme.typography.labelLarge)
-                    ChipRow(options = CookCuisine.entries.map { it.name }, selected = form.cookCuisine.name) {
-                        onCookCuisineChanged(CookCuisine.valueOf(it))
-                    }
-                    Text("Station", style = MaterialTheme.typography.labelLarge)
-                    ChipRow(options = CookStation.entries.map { it.name }, selected = form.cookStation.name) {
-                        onCookStationChanged(CookStation.valueOf(it))
-                    }
-                    Text("Banquet", style = MaterialTheme.typography.labelLarge)
-                    ChipRow(options = listOf("YES", "NO"), selected = if (form.isBanquet) "YES" else "NO") {
-                        onBanquetChanged(it == "YES")
-                    }
-                }
-
-                WorkType.WAITER,
-                WorkType.BARTENDER -> {
-                    Text("Banquet", style = MaterialTheme.typography.labelLarge)
-                    ChipRow(options = listOf("YES", "NO"), selected = if (form.isBanquet) "YES" else "NO") {
-                        onBanquetChanged(it == "YES")
-                    }
-                }
-
-                WorkType.DISHWASHER -> {
-                    Text("Zone", style = MaterialTheme.typography.labelLarge)
-                    ChipRow(options = DishwasherZone.entries.map { it.name }, selected = form.dishwasherZone.name) {
-                        onDishwasherZoneChanged(DishwasherZone.valueOf(it))
-                    }
-                }
+            SectionCard(title = "Work type") {
+                ChipRow(
+                    options = WorkType.entries,
+                    selected = form.workType,
+                    labelOf = { it.humanLabel() },
+                    onSelect = onWorkTypeChanged
+                )
             }
 
-            Button(onClick = onCreateShift, modifier = Modifier.fillMaxWidth()) {
-                Text("Create shift")
+            SectionCard(title = "Type-specific details") {
+                when (form.workType) {
+                    WorkType.COOK -> {
+                        Text("Cuisine", style = MaterialTheme.typography.labelLarge)
+                        ChipRow(
+                            options = CookCuisine.entries,
+                            selected = form.cookCuisine,
+                            labelOf = { it.humanLabel() },
+                            onSelect = onCookCuisineChanged
+                        )
+                        Text("Station", style = MaterialTheme.typography.labelLarge)
+                        ChipRow(
+                            options = CookStation.entries,
+                            selected = form.cookStation,
+                            labelOf = { it.humanLabel() },
+                            onSelect = onCookStationChanged
+                        )
+                        Text("Banquet", style = MaterialTheme.typography.labelLarge)
+                        YesNoRow(value = form.isBanquet, onChange = onBanquetChanged)
+                    }
+
+                    WorkType.WAITER,
+                    WorkType.BARTENDER -> {
+                        Text("Banquet", style = MaterialTheme.typography.labelLarge)
+                        YesNoRow(value = form.isBanquet, onChange = onBanquetChanged)
+                    }
+
+                    WorkType.DISHWASHER -> {
+                        Text("Zone", style = MaterialTheme.typography.labelLarge)
+                        ChipRow(
+                            options = DishwasherZone.entries,
+                            selected = form.dishwasherZone,
+                            labelOf = { it.humanLabel() },
+                            onSelect = onDishwasherZoneChanged
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Preview: ${previewWorkType(form)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            SectionCard(title = "Action") {
+                Button(onClick = onCreateShift, modifier = Modifier.fillMaxWidth()) {
+                    Text("Create shift")
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ChipRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { option ->
-            FilterChip(selected = option == selected, onClick = { onSelect(option) }, label = { Text(option) })
+private fun SectionCard(title: String, content: @Composable Column.() -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            content()
         }
     }
+}
+
+@Composable
+private fun YesNoRow(value: Boolean, onChange: (Boolean) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = value, onClick = { onChange(true) }, label = { Text("Yes") })
+        FilterChip(selected = !value, onClick = { onChange(false) }, label = { Text("No") })
+    }
+}
+
+@Composable
+private fun <T> ChipRow(
+    options: List<T>,
+    selected: T,
+    labelOf: (T) -> String,
+    onSelect: (T) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { option ->
+            FilterChip(selected = option == selected, onClick = { onSelect(option) }, label = { Text(labelOf(option)) })
+        }
+    }
+}
+
+private fun Enum<*>.humanLabel(): String =
+    name.lowercase().split("_").joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
+
+private fun previewWorkType(form: BusinessShiftFormState): String = when (form.workType) {
+    WorkType.COOK -> listOf(
+        "Cook",
+        form.cookCuisine.humanLabel(),
+        form.cookStation.humanLabel(),
+        if (form.isBanquet) "Banquet" else "Non-banquet"
+    ).joinToString(" · ")
+    WorkType.WAITER -> "Waiter · ${if (form.isBanquet) "Banquet" else "Non-banquet"}"
+    WorkType.BARTENDER -> "Bartender · ${if (form.isBanquet) "Banquet" else "Non-banquet"}"
+    WorkType.DISHWASHER -> "Dishwasher · ${form.dishwasherZone.humanLabel()}"
 }

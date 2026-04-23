@@ -7,28 +7,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.povarup.core.BusinessDemoViewModel
 import com.povarup.core.RootContent
 import com.povarup.core.RootEntryMode
+import com.povarup.core.RootViewModel
 import com.povarup.core.WorkerViewModel
 import com.povarup.core.resolveRootContent
 import com.povarup.ui.business.BusinessDemoScreen
 
 @Composable
-fun WorkerApp(
+fun PovarUpApp(
     viewModel: WorkerViewModel,
     businessDemoViewModel: BusinessDemoViewModel,
+    rootViewModel: RootViewModel,
     onOpenLegacyDashboard: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val businessState by businessDemoViewModel.uiState.collectAsStateWithLifecycle()
-    var mode by rememberSaveable { mutableStateOf(RootEntryMode.WELCOME) }
+    val mode by rootViewModel.mode.collectAsStateWithLifecycle()
 
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
@@ -37,21 +36,25 @@ fun WorkerApp(
                     CircularProgressIndicator()
                 }
             } else {
-                when (resolveRootContent(isWorkerLoggedIn = state.isLoggedIn, mode = mode)) {
+                when (resolveRootContent(
+                    isWorkerLoggedIn = state.isLoggedIn,
+                    isBusinessDemoSessionActive = businessState.isInDemoSession,
+                    mode = mode
+                )) {
                     RootContent.WELCOME -> LoginScreen(
                         state = state,
                         onUserIdChanged = viewModel::onUserIdChanged,
                         onPasswordChanged = viewModel::onPasswordChanged,
                         onLogin = {
-                            mode = RootEntryMode.WORKER
+                            rootViewModel.setMode(RootEntryMode.WORKER)
                             viewModel.login()
                         },
                         onContinueAsDemoWorker = {
-                            mode = RootEntryMode.WORKER
+                            rootViewModel.setMode(RootEntryMode.WORKER)
                             viewModel.continueAsDemoWorker()
                         },
                         onContinueAsDemoBusiness = {
-                            mode = RootEntryMode.DEMO_BUSINESS
+                            rootViewModel.setMode(RootEntryMode.DEMO_BUSINESS)
                             businessDemoViewModel.enterDemoBusiness()
                         },
                         onOpenLegacyDashboard = onOpenLegacyDashboard
@@ -62,16 +65,16 @@ fun WorkerApp(
                         onRetry = viewModel::refresh,
                         onRefresh = viewModel::refresh,
                         onApply = viewModel::applyToShift,
-                        onDismissError = viewModel::dismissError,
+                        onDismissMessage = viewModel::dismissMessage,
                         onLogout = {
                             viewModel.logout()
-                            mode = RootEntryMode.WELCOME
+                            rootViewModel.setMode(RootEntryMode.WELCOME)
                         }
                     )
 
                     RootContent.DEMO_BUSINESS -> BusinessDemoScreen(
                         state = businessState,
-                        onBackToWelcome = { mode = RootEntryMode.WELCOME },
+                        onBackToWelcome = { rootViewModel.setMode(RootEntryMode.WELCOME) },
                         onTitleChanged = businessDemoViewModel::onTitleChanged,
                         onLocationChanged = businessDemoViewModel::onLocationChanged,
                         onStartAtChanged = businessDemoViewModel::onStartAtChanged,
@@ -84,7 +87,7 @@ fun WorkerApp(
                         onDishwasherZoneChanged = businessDemoViewModel::onDishwasherZoneChanged,
                         onCreateShift = businessDemoViewModel::createShift,
                         onOpenShift = businessDemoViewModel::openShift,
-                        onDismissError = businessDemoViewModel::dismissError,
+                        onDismissMessage = businessDemoViewModel::dismissMessage,
                         onCloseDetails = businessDemoViewModel::closeShiftDetails
                     )
                 }
