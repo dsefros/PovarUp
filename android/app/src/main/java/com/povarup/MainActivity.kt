@@ -7,13 +7,21 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.povarup.core.WorkerViewModel
 import com.povarup.data.ApiMarketplaceRepository
+import com.povarup.data.DemoMarketplaceRepository
 import com.povarup.data.SharedPreferencesSessionStore
+import com.povarup.data.WorkerRepositorySelector
 import com.povarup.domain.UserRole
 import com.povarup.ui.worker.WorkerApp
 
 class MainActivity : ComponentActivity() {
     private val sessionStore by lazy { SharedPreferencesSessionStore(applicationContext) }
-    private val repository by lazy { ApiMarketplaceRepository(sessionStore = sessionStore) }
+    private val repository by lazy {
+        WorkerRepositorySelector(
+            sessionStore = sessionStore,
+            realRepository = ApiMarketplaceRepository(sessionStore = sessionStore),
+            demoRepository = DemoMarketplaceRepository(sessionStore = sessionStore)
+        )
+    }
 
     private val viewModel: WorkerViewModel by viewModels {
         WorkerViewModel.Factory(repository = repository)
