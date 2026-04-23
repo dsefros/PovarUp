@@ -10,6 +10,7 @@ import com.povarup.data.WorkerDataSourceMode
 import com.povarup.data.WorkerModeSelectable
 import com.povarup.domain.Shift
 import com.povarup.domain.UserRole
+import com.povarup.domain.workTypeDescription
 import com.povarup.domain.capability
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ data class LoginFormState(
 data class ShiftCardUiModel(
     val id: String,
     val title: String,
+    val workTypeDetails: String?,
     val dateTimeLabel: String,
     val locationLabel: String,
     val payLabel: String,
@@ -252,6 +254,7 @@ class WorkerViewModel(
         ShiftCardUiModel(
             id = shift.id,
             title = shift.title,
+            workTypeDetails = shift.workTypeDescription(),
             dateTimeLabel = "${shift.startAt} → ${shift.endAt}",
             locationLabel = "Location: ${shift.locationId}",
             payLabel = "$${"%.2f".format(shift.payRateCents / 100.0)}/hr",
