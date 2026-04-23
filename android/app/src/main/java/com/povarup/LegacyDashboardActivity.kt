@@ -82,32 +82,38 @@ class LegacyDashboardActivity : AppCompatActivity() {
         val adminPayoutsBlock = bodyText()
         val adminProblemsBlock = bodyText()
 
-        setContentView(ScrollView(this).apply { addView(LinearLayout(this@LegacyDashboardActivity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-            addView(header); addView(accountState); addView(loadingBanner); addView(errorBanner); addView(statusBanner)
-            addView(refresh); addView(workerDemo); addView(businessDemo); addView(adminDemo); addView(userId); addView(password)
-            addView(login); addView(logout); addView(clear)
-            addView(sectionTitle("Worker actions")); addView(shiftId); addView(apply); addView(assignmentId); addView(checkIn); addView(checkOut)
-            addView(sectionTitle("Business actions")); addView(shiftTitle); addView(locationId); addView(payRate); addView(createShift)
-            addView(publishShift); addView(appId); addView(offer); addView(reject); addView(withdraw); addView(closeShift); addView(cancelShift)
-            addView(cancelAssignment); addView(release)
-            addView(sectionTitle("Important events")); addView(eventsBlock)
-            addView(sectionTitle("Worker: available shifts")); addView(availableShiftsBlock)
-            addView(sectionTitle("Worker: my applications")); addView(applicationsBlock)
-            addView(sectionTitle("Worker: my assignments")); addView(assignmentsBlock)
-            addView(sectionTitle("Worker: current active shift")); addView(activeShiftBlock)
-            addView(sectionTitle("Worker: completed shifts")); addView(completedBlock)
-            addView(sectionTitle("Worker: payout status")); addView(payoutsBlock)
-            addView(sectionTitle("Business: owned shifts")); addView(businessShiftsBlock)
-            addView(sectionTitle("Business: applications for selected shift")); addView(businessAppsBlock)
-            addView(sectionTitle("Business: assignments status")); addView(businessAssignmentsBlock)
-            addView(sectionTitle("Business: payout/release status")); addView(businessPayoutBlock)
-            addView(sectionTitle("Admin/operator payout ops")); addView(adminPayoutId); addView(adminToPending); addView(adminToPaid); addView(adminToFailed)
-            addView(sectionTitle("Admin: assignments")); addView(adminAssignmentsBlock)
-            addView(sectionTitle("Admin: payouts")); addView(adminPayoutsBlock)
-            addView(sectionTitle("Admin: problem cases")); addView(adminProblemsBlock)
-        } })
+        setContentView(
+            ScrollView(this).apply {
+                addView(
+                    LinearLayout(this@LegacyDashboardActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(24, 24, 24, 24)
+                        addView(header); addView(accountState); addView(loadingBanner); addView(errorBanner); addView(statusBanner)
+                        addView(refresh); addView(workerDemo); addView(businessDemo); addView(adminDemo); addView(userId); addView(password)
+                        addView(login); addView(logout); addView(clear)
+                        addView(sectionTitle("Worker actions")); addView(shiftId); addView(apply); addView(assignmentId); addView(checkIn); addView(checkOut)
+                        addView(sectionTitle("Business actions")); addView(shiftTitle); addView(locationId); addView(payRate); addView(createShift)
+                        addView(publishShift); addView(appId); addView(offer); addView(reject); addView(withdraw); addView(closeShift); addView(cancelShift)
+                        addView(cancelAssignment); addView(release)
+                        addView(sectionTitle("Important events")); addView(eventsBlock)
+                        addView(sectionTitle("Worker: available shifts")); addView(availableShiftsBlock)
+                        addView(sectionTitle("Worker: my applications")); addView(applicationsBlock)
+                        addView(sectionTitle("Worker: my assignments")); addView(assignmentsBlock)
+                        addView(sectionTitle("Worker: current active shift")); addView(activeShiftBlock)
+                        addView(sectionTitle("Worker: completed shifts")); addView(completedBlock)
+                        addView(sectionTitle("Worker: payout status")); addView(payoutsBlock)
+                        addView(sectionTitle("Business: owned shifts")); addView(businessShiftsBlock)
+                        addView(sectionTitle("Business: applications for selected shift")); addView(businessAppsBlock)
+                        addView(sectionTitle("Business: assignments status")); addView(businessAssignmentsBlock)
+                        addView(sectionTitle("Business: payout/release status")); addView(businessPayoutBlock)
+                        addView(sectionTitle("Admin/operator payout ops")); addView(adminPayoutId); addView(adminToPending); addView(adminToPaid); addView(adminToFailed)
+                        addView(sectionTitle("Admin: assignments")); addView(adminAssignmentsBlock)
+                        addView(sectionTitle("Admin: payouts")); addView(adminPayoutsBlock)
+                        addView(sectionTitle("Admin: problem cases")); addView(adminProblemsBlock)
+                    }
+                )
+            }
+        )
 
         workerDemo.setOnClickListener { userId.setText("worker.demo"); password.setText("workerpass") }
         businessDemo.setOnClickListener { userId.setText("business.demo"); password.setText("businesspass") }
