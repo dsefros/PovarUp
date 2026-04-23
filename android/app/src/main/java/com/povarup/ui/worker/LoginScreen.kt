@@ -58,8 +58,10 @@ fun LoginScreen(
                     singleLine = true
                 )
 
-                state.errorMessage?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                // Message rule: welcome/login keeps inline validation/login errors for immediate context.
+                // Worker and business in-app surfaces use snackbar + explicit dismiss lifecycle.
+                state.message?.takeIf { it.kind == com.povarup.core.UiMessageKind.ERROR }?.let {
+                    Text(text = it.text, color = MaterialTheme.colorScheme.error)
                 }
 
                 Button(

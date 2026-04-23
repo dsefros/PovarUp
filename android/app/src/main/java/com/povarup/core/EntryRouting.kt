@@ -12,8 +12,12 @@ enum class RootContent {
     DEMO_BUSINESS
 }
 
-fun resolveRootContent(isWorkerLoggedIn: Boolean, mode: RootEntryMode): RootContent = when {
+fun resolveRootContent(
+    isWorkerLoggedIn: Boolean,
+    isBusinessDemoSessionActive: Boolean,
+    mode: RootEntryMode
+): RootContent = when {
     isWorkerLoggedIn -> RootContent.WORKER_SHIFTS
-    mode == RootEntryMode.DEMO_BUSINESS -> RootContent.DEMO_BUSINESS
+    mode == RootEntryMode.DEMO_BUSINESS && isBusinessDemoSessionActive -> RootContent.DEMO_BUSINESS
     else -> RootContent.WELCOME
 }

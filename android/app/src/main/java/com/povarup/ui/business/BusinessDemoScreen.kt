@@ -41,14 +41,14 @@ fun BusinessDemoScreen(
     onDishwasherZoneChanged: (com.povarup.domain.DishwasherZone) -> Unit,
     onCreateShift: () -> Unit,
     onOpenShift: (String) -> Unit,
-    onDismissError: () -> Unit,
+    onDismissMessage: () -> Unit,
     onCloseDetails: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            onDismissError()
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbarHostState.showSnackbar(it.text)
+            onDismissMessage()
         }
     }
 

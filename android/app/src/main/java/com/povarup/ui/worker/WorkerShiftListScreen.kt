@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,15 +32,15 @@ fun WorkerShiftListScreen(
     onRetry: () -> Unit,
     onRefresh: () -> Unit,
     onApply: (String) -> Unit,
-    onDismissError: () -> Unit,
+    onDismissMessage: () -> Unit,
     onLogout: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(state.errorMessage) {
-        if (state.errorMessage != null) {
-            snackbarHostState.showSnackbar(state.errorMessage)
-            onDismissError()
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbarHostState.showSnackbar(it.text)
+            onDismissMessage()
         }
     }
 
@@ -85,16 +84,6 @@ fun WorkerShiftListScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item {
-                    state.infoMessage?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
                 items(state.shifts, key = { it.id }) { shift ->
                     ShiftCard(shift = shift, onApply = onApply)
                 }
