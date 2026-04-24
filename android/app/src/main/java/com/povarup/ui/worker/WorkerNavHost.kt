@@ -28,6 +28,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.povarup.core.WorkerAssignmentUiModel
+import com.povarup.core.WorkerApplicationUiModel
 import com.povarup.core.WorkerPayoutUiModel
 import com.povarup.core.WorkerUiState
 import com.povarup.domain.AssignmentStatus
@@ -47,6 +48,7 @@ fun WorkerNavHost(
     state: WorkerUiState,
     onRefresh: () -> Unit,
     onApply: (String) -> Unit,
+    onWithdrawApplication: (String) -> Unit,
     onCheckIn: (String) -> Unit,
     onCheckOut: (String) -> Unit,
     onDismissMessage: () -> Unit,
@@ -90,7 +92,14 @@ fun WorkerNavHost(
             onBack = { backstack.removeLast() }
         )
 
-        WorkerRoute.WorkerApplications -> WorkerApplicationsScreen(onBack = { backstack.removeLast() })
+        WorkerRoute.WorkerApplications -> WorkerApplicationsScreen(
+            state = state,
+            onRefresh = onRefresh,
+            onWithdraw = onWithdrawApplication,
+            onOpenShiftDetail = { shiftId -> backstack.push(WorkerRoute.WorkerShiftDetail(shiftId)) },
+            onDismissMessage = onDismissMessage,
+            onBack = { backstack.removeLast() }
+        )
 
         WorkerRoute.WorkerAssignments -> WorkerAssignmentsScreen(
             state = state,
@@ -187,11 +196,91 @@ fun WorkerHomeScreen(
 }
 
 @Composable
-fun WorkerApplicationsScreen(onBack: () -> Unit) = WorkerPlaceholderScreen(
-    title = "Мои отклики",
-    emptyStateText = "Отклики пока не добавлены в этом разделе.",
-    onBack = onBack
-)
+fun WorkerApplicationsScreen(
+    state: WorkerUiState,
+    onRefresh: () -> Unit,
+    onWithdraw: (String) -> Unit,
+    onOpenShiftDetail: (String) -> Unit,
+    onDismissMessage: () -> Unit,
+    onBack: () -> Unit
+) {
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbarHostState.showSnackbar(it.text)
+            onDismissMessage()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Мои отклики") },
+                actions = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                    TextButton(onClick = onRefresh, enabled = !state.isLoadingShifts) { Text("Refresh") }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+    ) { padding ->
+        if (state.applications.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("Откликов пока нет", style = MaterialTheme.typography.titleLarge)
+                Text("Найдите смену и отправьте первый отклик.")
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(state.applications, key = { it.applicationId }) { application ->
+                    WorkerApplicationCard(
+                        application = application,
+                        onOpenShiftDetail = onOpenShiftDetail,
+                        onWithdraw = onWithdraw
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkerApplicationCard(
+    application: WorkerApplicationUiModel,
+    onOpenShiftDetail: (String) -> Unit,
+    onWithdraw: (String) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(application.shiftTitle, style = MaterialTheme.typography.titleMedium)
+            Text("Отклик: ${application.shortId}")
+            Text("Application ID: ${application.applicationId}", style = MaterialTheme.typography.bodySmall)
+            Text("Shift ID: ${application.shiftId}")
+            Text("Статус: ${application.statusLabel}")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { onOpenShiftDetail(application.shiftId) }) { Text("Открыть смену") }
+                if (application.canWithdraw) {
+                    TextButton(onClick = { onWithdraw(application.applicationId) }) { Text("Отозвать") }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
