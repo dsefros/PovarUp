@@ -52,6 +52,20 @@ data class ActiveAssignmentUiModel(
     val statusLabel: String
 )
 
+data class WorkerAssignmentUiModel(
+    val assignmentId: String,
+    val shiftId: String,
+    val title: String,
+    val dateTimeLabel: String,
+    val locationLabel: String,
+    val status: AssignmentStatus,
+    val statusLabel: String,
+    val lifecycleText: String,
+    val canCheckIn: Boolean,
+    val canCheckOut: Boolean,
+    val isPaid: Boolean
+)
+
 data class WorkerUiState(
     val isSessionRestoring: Boolean = true,
     val isLoggedIn: Boolean = false,
@@ -63,6 +77,7 @@ data class WorkerUiState(
     val assignmentsCount: Int? = null,
     val payoutsCount: Int? = null,
     val activeAssignment: ActiveAssignmentUiModel? = null,
+    val assignments: List<WorkerAssignmentUiModel> = emptyList(),
     val message: UiMessage? = null,
     val hasLoadedAtLeastOnce: Boolean = false
 )
@@ -173,6 +188,44 @@ class WorkerViewModel(
         _uiState.update { it.copy(message = null) }
     }
 
+    fun checkIn(assignmentId: String) {
+        if (!_uiState.value.isLoggedIn) return
+        viewModelScope.launch(dispatchers.io) {
+            val result = repository.checkIn(assignmentId)
+            if (result.isFailure) {
+                _uiState.update {
+                    it.copy(
+                        message = UiMessage(
+                            result.exceptionOrNull()?.message ?: "Не удалось начать смену",
+                            UiMessageKind.ERROR
+                        )
+                    )
+                }
+                return@launch
+            }
+            loadShifts(showFullScreenLoader = false, message = UiMessage("Смена начата", UiMessageKind.INFO))
+        }
+    }
+
+    fun checkOut(assignmentId: String) {
+        if (!_uiState.value.isLoggedIn) return
+        viewModelScope.launch(dispatchers.io) {
+            val result = repository.checkOut(assignmentId)
+            if (result.isFailure) {
+                _uiState.update {
+                    it.copy(
+                        message = UiMessage(
+                            result.exceptionOrNull()?.message ?: "Не удалось завершить смену",
+                            UiMessageKind.ERROR
+                        )
+                    )
+                }
+                return@launch
+            }
+            loadShifts(showFullScreenLoader = false, message = UiMessage("Смена завершена", UiMessageKind.INFO))
+        }
+    }
+
     fun logout() {
         repository.clearSession()
         latestShifts = emptyList()
@@ -255,6 +308,7 @@ class WorkerViewModel(
                 applicationsCount = applications.size,
                 assignmentsCount = assignments.size,
                 activeAssignment = assignments.toActiveAssignmentUiModel(latestShifts),
+                assignments = assignments.toWorkerAssignmentsUiModels(latestShifts),
                 hasLoadedAtLeastOnce = true
             )
         }
@@ -300,6 +354,33 @@ class WorkerViewModel(
             locationLabel = shift?.let { "Location: ${it.locationId}" } ?: "Location unavailable",
             statusLabel = activeAssignment.rawStatus.replaceFirstChar { it.uppercase() }
         )
+    }
+
+    private fun List<Assignment>.toWorkerAssignmentsUiModels(shifts: List<Shift>): List<WorkerAssignmentUiModel> = map { assignment ->
+        val shift = shifts.firstOrNull { it.id == assignment.shiftId }
+        val capability = assignment.capability(UserRole.WORKER)
+        WorkerAssignmentUiModel(
+            assignmentId = assignment.id,
+            shiftId = assignment.shiftId,
+            title = shift?.title ?: "Смена ${assignment.shiftId}",
+            dateTimeLabel = shift?.let { "${it.startAt} → ${it.endAt}" } ?: "Время не указано",
+            locationLabel = shift?.let { "Локация: ${it.locationId}" } ?: "Локация недоступна",
+            status = assignment.status,
+            statusLabel = assignment.rawStatus.replaceFirstChar { it.uppercase() },
+            lifecycleText = assignment.toLifecycleText(),
+            canCheckIn = capability.canCheckIn,
+            canCheckOut = capability.canCheckOut,
+            isPaid = assignment.status == AssignmentStatus.PAID
+        )
+    }
+
+    private fun Assignment.toLifecycleText(): String = when (status) {
+        AssignmentStatus.ASSIGNED -> "Назначена"
+        AssignmentStatus.IN_PROGRESS -> "В процессе"
+        AssignmentStatus.COMPLETED -> "Завершена"
+        AssignmentStatus.CANCELLED -> "Отменена"
+        AssignmentStatus.PAID -> "Оплачена"
+        AssignmentStatus.UNKNOWN -> "Статус уточняется"
     }
 
     class Factory(
