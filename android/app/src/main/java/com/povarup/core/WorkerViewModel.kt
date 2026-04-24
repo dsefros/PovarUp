@@ -8,6 +8,8 @@ import com.povarup.data.DemoMarketplaceRepository
 import com.povarup.data.MarketplaceRepository
 import com.povarup.data.WorkerDataSourceMode
 import com.povarup.data.WorkerModeSelectable
+import com.povarup.domain.Application
+import com.povarup.domain.ApplicationStatus
 import com.povarup.domain.Assignment
 import com.povarup.domain.AssignmentStatus
 import com.povarup.domain.Payout
@@ -77,6 +79,16 @@ data class WorkerPayoutUiModel(
     val note: String?
 )
 
+data class WorkerApplicationUiModel(
+    val applicationId: String,
+    val shortId: String,
+    val shiftId: String,
+    val shiftTitle: String,
+    val status: ApplicationStatus,
+    val statusLabel: String,
+    val canWithdraw: Boolean
+)
+
 data class WorkerUiState(
     val isSessionRestoring: Boolean = true,
     val isLoggedIn: Boolean = false,
@@ -84,6 +96,7 @@ data class WorkerUiState(
     val isLoadingShifts: Boolean = false,
     val loginForm: LoginFormState = LoginFormState(),
     val shifts: List<ShiftCardUiModel> = emptyList(),
+    val applications: List<WorkerApplicationUiModel> = emptyList(),
     val applicationsCount: Int? = null,
     val assignmentsCount: Int? = null,
     val payoutsCount: Int? = null,
@@ -238,6 +251,25 @@ class WorkerViewModel(
         }
     }
 
+    fun withdrawApplication(applicationId: String) {
+        if (!_uiState.value.isLoggedIn) return
+        viewModelScope.launch(dispatchers.io) {
+            val result = repository.withdrawApplication(applicationId)
+            if (result.isFailure) {
+                _uiState.update {
+                    it.copy(
+                        message = UiMessage(
+                            result.exceptionOrNull()?.message ?: "Не удалось отозвать отклик",
+                            UiMessageKind.ERROR
+                        )
+                    )
+                }
+                return@launch
+            }
+            loadShifts(showFullScreenLoader = false, message = UiMessage("Отклик отозван", UiMessageKind.INFO))
+        }
+    }
+
     fun logout() {
         repository.clearSession()
         latestShifts = emptyList()
@@ -330,6 +362,7 @@ class WorkerViewModel(
                 isLoadingShifts = false,
                 isLoggedIn = true,
                 shifts = latestShifts.toUiModels(latestRelatedShiftIds, applyingShiftIds),
+                applications = applications.toWorkerApplicationsUiModels(latestShifts),
                 applicationsCount = applications.size,
                 assignmentsCount = assignments.size,
                 payoutsCount = payouts.size,
@@ -401,6 +434,20 @@ class WorkerViewModel(
         )
     }
 
+    private fun List<Application>.toWorkerApplicationsUiModels(shifts: List<Shift>): List<WorkerApplicationUiModel> = map { application ->
+        val shift = shifts.firstOrNull { it.id == application.shiftId }
+        val capability = application.capability(UserRole.WORKER)
+        WorkerApplicationUiModel(
+            applicationId = application.id,
+            shortId = application.id.takeLast(8),
+            shiftId = application.shiftId,
+            shiftTitle = shift?.title ?: "Смена ${application.shiftId}",
+            status = application.status,
+            statusLabel = application.status.toWorkerLabel(),
+            canWithdraw = capability.canWithdraw
+        )
+    }
+
     private fun Assignment.toLifecycleText(): String = when (status) {
         AssignmentStatus.ASSIGNED -> "Назначена"
         AssignmentStatus.IN_PROGRESS -> "В процессе"
@@ -427,6 +474,14 @@ class WorkerViewModel(
         PayoutStatus.PAID -> "Выплачено"
         PayoutStatus.FAILED -> "Ошибка выплаты"
         PayoutStatus.UNKNOWN -> "Неизвестный статус"
+    }
+
+    private fun ApplicationStatus.toWorkerLabel(): String = when (this) {
+        ApplicationStatus.APPLIED -> "Отклик подан"
+        ApplicationStatus.ACCEPTED -> "Принят / сделан оффер"
+        ApplicationStatus.REJECTED -> "Отклонен"
+        ApplicationStatus.WITHDRAWN -> "Отозван"
+        ApplicationStatus.UNKNOWN -> "Статус уточняется"
     }
 
     class Factory(
