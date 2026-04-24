@@ -60,9 +60,8 @@ fun PovarUpApp(
                         onOpenLegacyDashboard = onOpenLegacyDashboard
                     )
 
-                    RootContent.WORKER_SHIFTS -> WorkerShiftListScreen(
+                    RootContent.WORKER_SHIFTS -> WorkerNavHost(
                         state = state,
-                        onRetry = viewModel::refresh,
                         onRefresh = viewModel::refresh,
                         onApply = viewModel::applyToShift,
                         onDismissMessage = viewModel::dismissMessage,
