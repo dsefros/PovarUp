@@ -112,7 +112,7 @@ class WorkerViewModelModeSelectionTest {
         override fun cancelShift(shiftId: String): Result<Shift> = Result.failure(NotImplementedError())
         override fun cancelAssignment(assignmentId: String): Result<Assignment> = Result.failure(NotImplementedError())
         override fun releasePayout(assignmentId: String): Result<Payout> = Result.failure(NotImplementedError())
-        override fun listMyPayouts(): Result<List<Payout>> = Result.failure(NotImplementedError())
+        override fun listMyPayouts(): Result<List<Payout>> = Result.success(emptyList())
         override fun listAdminAssignments(): Result<List<Assignment>> = Result.failure(NotImplementedError())
         override fun listAdminPayouts(): Result<List<Payout>> = Result.failure(NotImplementedError())
         override fun updateAdminPayoutStatus(payoutId: String, status: String, note: String?): Result<Payout> = Result.failure(NotImplementedError())

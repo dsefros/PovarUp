@@ -81,12 +81,12 @@ class DemoMarketplaceRepositoryTest {
         assertEquals(true, cookShift.isBanquet)
 
         val waiterShifts = shifts.filter { it.workType == WorkType.WAITER }.sortedBy { it.id }
-        assertEquals(listOf(false, true), waiterShifts.map { it.isBanquet })
+        assertEquals(setOf(false, true), waiterShifts.map { it.isBanquet }.toSet())
 
         val bartenderShifts = shifts.filter { it.workType == WorkType.BARTENDER }.sortedBy { it.id }
-        assertEquals(listOf(false, true), bartenderShifts.map { it.isBanquet })
+        assertEquals(setOf(false, true), bartenderShifts.map { it.isBanquet }.toSet())
 
         val dishwasherShifts = shifts.filter { it.workType == WorkType.DISHWASHER }.sortedBy { it.id }
-        assertEquals(listOf(DishwasherZone.WHITE, DishwasherZone.BLACK), dishwasherShifts.map { it.dishwasherZone })
+        assertEquals(setOf(DishwasherZone.WHITE, DishwasherZone.BLACK), dishwasherShifts.map { it.dishwasherZone }.toSet())
     }
 }

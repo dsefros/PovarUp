@@ -9,16 +9,37 @@ import org.junit.Test
 class EntryRoutingTest {
     @Test
     fun showsWelcomeByDefaultWhenLoggedOut() {
-        assertEquals(RootContent.WELCOME, resolveRootContent(false, RootEntryMode.WELCOME))
+        assertEquals(
+            RootContent.WELCOME,
+            resolveRootContent(
+                isWorkerLoggedIn = false,
+                isBusinessDemoSessionActive = false,
+                mode = RootEntryMode.WELCOME
+            )
+        )
     }
 
     @Test
-    fun showsBusinessDemoWhenModeIsBusiness() {
-        assertEquals(RootContent.DEMO_BUSINESS, resolveRootContent(false, RootEntryMode.DEMO_BUSINESS))
+    fun showsBusinessDemoWhenModeIsBusinessAndDemoSessionIsActive() {
+        assertEquals(
+            RootContent.DEMO_BUSINESS,
+            resolveRootContent(
+                isWorkerLoggedIn = false,
+                isBusinessDemoSessionActive = true,
+                mode = RootEntryMode.DEMO_BUSINESS
+            )
+        )
     }
 
     @Test
     fun loggedInWorkerAlwaysGoesToWorkerShifts() {
-        assertEquals(RootContent.WORKER_SHIFTS, resolveRootContent(true, RootEntryMode.DEMO_BUSINESS))
+        assertEquals(
+            RootContent.WORKER_SHIFTS,
+            resolveRootContent(
+                isWorkerLoggedIn = true,
+                isBusinessDemoSessionActive = true,
+                mode = RootEntryMode.DEMO_BUSINESS
+            )
+        )
     }
 }

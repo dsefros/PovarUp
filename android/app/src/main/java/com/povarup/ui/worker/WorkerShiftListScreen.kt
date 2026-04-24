@@ -31,7 +31,7 @@ fun WorkerShiftListScreen(
     state: WorkerUiState,
     onRetry: () -> Unit,
     onRefresh: () -> Unit,
-    onApply: (String) -> Unit,
+    onOpenShiftDetail: (String) -> Unit,
     onDismissMessage: () -> Unit,
     onLogout: () -> Unit,
     onBack: (() -> Unit)? = null
@@ -89,7 +89,7 @@ fun WorkerShiftListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(state.shifts, key = { it.id }) { shift ->
-                    ShiftCard(shift = shift, onApply = onApply)
+                    ShiftCard(shift = shift, onOpenDetails = onOpenShiftDetail)
                 }
             }
         }

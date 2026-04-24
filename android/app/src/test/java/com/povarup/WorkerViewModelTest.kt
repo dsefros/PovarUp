@@ -43,6 +43,8 @@ class WorkerViewModelTest {
             assertTrue(vm.uiState.value.isLoggedIn)
             assertFalse(vm.uiState.value.isLoggingIn)
             assertEquals(2, vm.uiState.value.shifts.size)
+            assertEquals(1, vm.uiState.value.payoutsCount)
+            assertEquals("В обработке", vm.uiState.value.payouts.firstOrNull()?.statusLabel)
         } finally {
             Dispatchers.resetMain()
         }
@@ -77,7 +79,7 @@ class WorkerViewModelTest {
             advanceUntilIdle()
 
             assertFalse(vm.uiState.value.isLoggedIn)
-            assertTrue(vm.uiState.value.errorMessage?.contains("worker accounts only") == true)
+            assertTrue(vm.uiState.value.message?.text?.contains("worker accounts only") == true)
             assertEquals(1, repo.logoutCalls)
         } finally {
             Dispatchers.resetMain()
@@ -156,7 +158,11 @@ class WorkerViewModelTest {
         override fun cancelShift(shiftId: String): Result<Shift> = Result.failure(NotImplementedError())
         override fun cancelAssignment(assignmentId: String): Result<Assignment> = Result.failure(NotImplementedError())
         override fun releasePayout(assignmentId: String): Result<Payout> = Result.failure(NotImplementedError())
-        override fun listMyPayouts(): Result<List<Payout>> = Result.success(emptyList())
+        override fun listMyPayouts(): Result<List<Payout>> = Result.success(
+            listOf(
+                Payout("payout_12345678", "assignment_1", "worker.demo", 12345, PayoutStatus.PENDING, "pending")
+            )
+        )
         override fun listAdminAssignments(): Result<List<Assignment>> = Result.success(emptyList())
         override fun listAdminPayouts(): Result<List<Payout>> = Result.success(listOf(Payout("p", "a", "w", 1, PayoutStatus.CREATED, "created")))
         override fun updateAdminPayoutStatus(payoutId: String, status: String, note: String?): Result<Payout> = Result.failure(NotImplementedError())

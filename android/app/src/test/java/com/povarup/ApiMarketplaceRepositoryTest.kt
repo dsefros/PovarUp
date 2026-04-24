@@ -11,7 +11,7 @@ class ApiMarketplaceRepositoryTest {
     fun loginStoresSessionAndProtectedGetUsesBearerToken() {
         val store = RecordingStore()
         val api = RecordingApi(
-            onPost = { path, _, _, _ ->
+            onPost = { path, _, _, _, _ ->
                 if (path == "/auth/login") Result.success(SessionDto("sess_1", "worker.demo", "worker"))
                 else Result.failure(IllegalStateException("Unexpected path"))
             },
@@ -63,7 +63,7 @@ class ApiMarketplaceRepositoryTest {
     fun applyToShiftUsesBearerAndMapsItemEnvelope() {
         val store = RecordingStore().apply { save(SessionToken("sess_apply", "worker.demo", "worker")) }
         val api = RecordingApi(
-            onPost = { path, _, bearer, request ->
+            onPost = { path, _, bearer, request, _ ->
                 if (path == "/applications") {
                     assertEquals("sess_apply", bearer)
                     val req = request as CreateApplicationRequest

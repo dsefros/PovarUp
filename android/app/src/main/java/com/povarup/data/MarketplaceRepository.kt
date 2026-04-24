@@ -91,7 +91,8 @@ class MarketplaceApiClient(private val gson: Gson = Gson()) : MarketplaceApi {
                 }.getOrNull()
                 throw MarketplaceError.Api(code = "http_error", apiMessage = parsedMessage ?: body ?: "HTTP $code")
             }
-            gson.fromJson(body.orEmpty(), type)
+            @Suppress("UNCHECKED_CAST")
+            gson.fromJson<Any>(body.orEmpty(), type) as T
         } catch (ioe: IOException) {
             throw MarketplaceError.Network(ioe)
         } catch (jsonError: JsonParseException) {

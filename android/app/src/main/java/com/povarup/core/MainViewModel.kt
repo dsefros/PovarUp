@@ -232,7 +232,7 @@ class MainViewModel(
         if (_uiState.value.inFlightActionKeys.contains(actionKey)) return
         applyDerivedState(_uiState.value.copy(inFlightActionKeys = _uiState.value.inFlightActionKeys + actionKey, errorMessage = null))
         viewModelScope.launch(dispatchers.io) {
-            Log.i("PovarUp", "action_start key=$actionKey")
+            runCatching { Log.i("PovarUp", "action_start key=$actionKey") }
             val result = action()
             if (result.isFailure) {
                 val message = result.exceptionOrNull()?.message ?: "Request failed"
