@@ -64,6 +64,8 @@ fun PovarUpApp(
                         state = state,
                         onRefresh = viewModel::refresh,
                         onApply = viewModel::applyToShift,
+                        onCheckIn = viewModel::checkIn,
+                        onCheckOut = viewModel::checkOut,
                         onDismissMessage = viewModel::dismissMessage,
                         onLogout = {
                             viewModel.logout()
