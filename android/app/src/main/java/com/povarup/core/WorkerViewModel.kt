@@ -8,6 +8,8 @@ import com.povarup.data.DemoMarketplaceRepository
 import com.povarup.data.MarketplaceRepository
 import com.povarup.data.WorkerDataSourceMode
 import com.povarup.data.WorkerModeSelectable
+import com.povarup.domain.Assignment
+import com.povarup.domain.AssignmentStatus
 import com.povarup.domain.Shift
 import com.povarup.domain.UserRole
 import com.povarup.domain.capability
@@ -42,6 +44,14 @@ data class ShiftCardUiModel(
     val isApplying: Boolean
 )
 
+data class ActiveAssignmentUiModel(
+    val assignmentId: String,
+    val title: String,
+    val dateTimeLabel: String,
+    val locationLabel: String,
+    val statusLabel: String
+)
+
 data class WorkerUiState(
     val isSessionRestoring: Boolean = true,
     val isLoggedIn: Boolean = false,
@@ -49,6 +59,10 @@ data class WorkerUiState(
     val isLoadingShifts: Boolean = false,
     val loginForm: LoginFormState = LoginFormState(),
     val shifts: List<ShiftCardUiModel> = emptyList(),
+    val applicationsCount: Int? = null,
+    val assignmentsCount: Int? = null,
+    val payoutsCount: Int? = null,
+    val activeAssignment: ActiveAssignmentUiModel? = null,
     val message: UiMessage? = null,
     val hasLoadedAtLeastOnce: Boolean = false
 )
@@ -228,7 +242,9 @@ class WorkerViewModel(
         }
 
         latestShifts = shiftsResult.getOrThrow()
-        latestRelatedShiftIds = (applicationsResult.getOrThrow().map { it.shiftId } + assignmentsResult.getOrThrow().map { it.shiftId }).toSet()
+        val applications = applicationsResult.getOrThrow()
+        val assignments = assignmentsResult.getOrThrow()
+        latestRelatedShiftIds = (applications.map { it.shiftId } + assignments.map { it.shiftId }).toSet()
 
         _uiState.update {
             it.copy(
@@ -236,6 +252,9 @@ class WorkerViewModel(
                 isLoadingShifts = false,
                 isLoggedIn = true,
                 shifts = latestShifts.toUiModels(latestRelatedShiftIds, applyingShiftIds),
+                applicationsCount = applications.size,
+                assignmentsCount = assignments.size,
+                activeAssignment = assignments.toActiveAssignmentUiModel(latestShifts),
                 hasLoadedAtLeastOnce = true
             )
         }
@@ -268,6 +287,18 @@ class WorkerViewModel(
                 else -> "Applied / Unavailable"
             },
             isApplying = isApplying
+        )
+    }
+
+    private fun List<Assignment>.toActiveAssignmentUiModel(shifts: List<Shift>): ActiveAssignmentUiModel? {
+        val activeAssignment = firstOrNull { it.status == AssignmentStatus.ASSIGNED || it.status == AssignmentStatus.IN_PROGRESS } ?: return null
+        val shift = shifts.firstOrNull { it.id == activeAssignment.shiftId }
+        return ActiveAssignmentUiModel(
+            assignmentId = activeAssignment.id,
+            title = shift?.title ?: "Current assignment",
+            dateTimeLabel = shift?.let { "${it.startAt} → ${it.endAt}" } ?: "Shift: ${activeAssignment.shiftId}",
+            locationLabel = shift?.let { "Location: ${it.locationId}" } ?: "Location unavailable",
+            statusLabel = activeAssignment.rawStatus.replaceFirstChar { it.uppercase() }
         )
     }
 

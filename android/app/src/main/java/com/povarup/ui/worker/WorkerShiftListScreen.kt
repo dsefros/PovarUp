@@ -33,7 +33,8 @@ fun WorkerShiftListScreen(
     onRefresh: () -> Unit,
     onApply: (String) -> Unit,
     onDismissMessage: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -49,6 +50,9 @@ fun WorkerShiftListScreen(
             TopAppBar(
                 title = { Text("Available Shifts") },
                 actions = {
+                    if (onBack != null) {
+                        TextButton(onClick = onBack) { Text("Back") }
+                    }
                     TextButton(onClick = onRefresh, enabled = !state.isLoadingShifts) { Text("Refresh") }
                     TextButton(onClick = onLogout) { Text("Logout") }
                 }
