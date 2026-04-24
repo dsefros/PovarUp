@@ -2,3 +2,21 @@ artifacts/
 android/gradle/wrapper/gradle-wrapper.jar
 
 backend/data/
+
+# Gradle
+.gradle/
+**/.gradle/
+
+# Build outputs
+build/
+**/build/
+
+# Android
+local.properties
+*.apk
+*.ap_
+
+# IDE
+.idea/
+*.iml
+
