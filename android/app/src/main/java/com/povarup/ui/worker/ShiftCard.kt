@@ -17,7 +17,7 @@ import com.povarup.core.ShiftCardUiModel
 @Composable
 fun ShiftCard(
     shift: ShiftCardUiModel,
-    onApply: (String) -> Unit
+    onOpenDetails: (String) -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -35,8 +35,8 @@ fun ShiftCard(
             Text(text = shift.payLabel)
             Text(text = "Status: ${shift.statusLabel}")
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Button(onClick = { onApply(shift.id) }, enabled = shift.canApply) {
-                    Text(shift.actionLabel)
+                Button(onClick = { onOpenDetails(shift.id) }) {
+                    Text("Подробнее")
                 }
             }
         }

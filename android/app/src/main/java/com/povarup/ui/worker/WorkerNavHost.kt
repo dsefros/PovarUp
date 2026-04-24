@@ -26,6 +26,7 @@ import com.povarup.core.WorkerUiState
 sealed interface WorkerRoute {
     data object WorkerHome : WorkerRoute
     data object WorkerShiftList : WorkerRoute
+    data class WorkerShiftDetail(val shiftId: String) : WorkerRoute
     data object WorkerApplications : WorkerRoute
     data object WorkerAssignments : WorkerRoute
     data object WorkerPayouts : WorkerRoute
@@ -61,6 +62,15 @@ fun WorkerNavHost(
             state = state,
             onRetry = onRefresh,
             onRefresh = onRefresh,
+            onOpenShiftDetail = { shiftId -> backstack.push(WorkerRoute.WorkerShiftDetail(shiftId)) },
+            onDismissMessage = onDismissMessage,
+            onLogout = onLogout,
+            onBack = { backstack.removeLast() }
+        )
+
+        is WorkerRoute.WorkerShiftDetail -> WorkerShiftDetailScreen(
+            state = state,
+            shiftId = currentRoute.shiftId,
             onApply = onApply,
             onDismissMessage = onDismissMessage,
             onLogout = onLogout,
