@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.povarup.core.WorkerPayoutUiModel
 import com.povarup.core.WorkerUiState
 
 sealed interface WorkerRoute {
@@ -69,7 +72,11 @@ fun WorkerNavHost(
 
         WorkerRoute.WorkerApplications -> WorkerApplicationsScreen(onBack = { backstack.removeLast() })
         WorkerRoute.WorkerAssignments -> WorkerAssignmentsScreen(onBack = { backstack.removeLast() })
-        WorkerRoute.WorkerPayouts -> WorkerPayoutsScreen(onBack = { backstack.removeLast() })
+        WorkerRoute.WorkerPayouts -> WorkerPayoutsScreen(
+            state = state,
+            onBack = { backstack.removeLast() },
+            onRefresh = onRefresh
+        )
     }
 }
 
@@ -155,12 +162,70 @@ fun WorkerAssignmentsScreen(onBack: () -> Unit) = WorkerPlaceholderScreen(
     onBack = onBack
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkerPayoutsScreen(onBack: () -> Unit) = WorkerPlaceholderScreen(
-    title = "Выплаты",
-    emptyStateText = "Выплаты пока не добавлены в этом разделе.",
-    onBack = onBack
-)
+fun WorkerPayoutsScreen(
+    state: WorkerUiState,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Выплаты") },
+                actions = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                    TextButton(onClick = onRefresh, enabled = !state.isLoadingShifts) { Text("Refresh") }
+                }
+            )
+        }
+    ) { padding ->
+        if (state.payouts.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("Выплат пока нет", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Выплата появится после завершения смены и release со стороны бизнеса.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(state.payouts, key = { it.id }) { payout ->
+                    WorkerPayoutCard(payout = payout)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkerPayoutCard(payout: WorkerPayoutUiModel) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text("Выплата #${payout.shortId}", style = MaterialTheme.typography.titleMedium)
+            Text("ID: ${payout.id}", style = MaterialTheme.typography.bodySmall)
+            Text("Assignment ID: ${payout.assignmentId}")
+            Text("Сумма: ${payout.amountLabel}")
+            Text("Статус: ${payout.statusLabel}")
+            payout.note?.let { Text("Примечание: $it", style = MaterialTheme.typography.bodyMedium) }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

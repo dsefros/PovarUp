@@ -10,6 +10,8 @@ import com.povarup.data.WorkerDataSourceMode
 import com.povarup.data.WorkerModeSelectable
 import com.povarup.domain.Assignment
 import com.povarup.domain.AssignmentStatus
+import com.povarup.domain.Payout
+import com.povarup.domain.PayoutStatus
 import com.povarup.domain.Shift
 import com.povarup.domain.UserRole
 import com.povarup.domain.capability
@@ -52,6 +54,15 @@ data class ActiveAssignmentUiModel(
     val statusLabel: String
 )
 
+data class WorkerPayoutUiModel(
+    val id: String,
+    val shortId: String,
+    val assignmentId: String,
+    val amountLabel: String,
+    val statusLabel: String,
+    val note: String?
+)
+
 data class WorkerUiState(
     val isSessionRestoring: Boolean = true,
     val isLoggedIn: Boolean = false,
@@ -62,6 +73,7 @@ data class WorkerUiState(
     val applicationsCount: Int? = null,
     val assignmentsCount: Int? = null,
     val payoutsCount: Int? = null,
+    val payouts: List<WorkerPayoutUiModel> = emptyList(),
     val activeAssignment: ActiveAssignmentUiModel? = null,
     val message: UiMessage? = null,
     val hasLoadedAtLeastOnce: Boolean = false
@@ -241,9 +253,22 @@ class WorkerViewModel(
             return
         }
 
+        val payoutsResult = repository.listMyPayouts()
+        if (payoutsResult.isFailure) {
+            _uiState.update {
+                it.copy(
+                    isLoggingIn = false,
+                    isLoadingShifts = false,
+                    message = UiMessage(payoutsResult.exceptionOrNull()?.message ?: "Failed to load payouts", UiMessageKind.ERROR)
+                )
+            }
+            return
+        }
+
         latestShifts = shiftsResult.getOrThrow()
         val applications = applicationsResult.getOrThrow()
         val assignments = assignmentsResult.getOrThrow()
+        val payouts = payoutsResult.getOrThrow()
         latestRelatedShiftIds = (applications.map { it.shiftId } + assignments.map { it.shiftId }).toSet()
 
         _uiState.update {
@@ -254,6 +279,8 @@ class WorkerViewModel(
                 shifts = latestShifts.toUiModels(latestRelatedShiftIds, applyingShiftIds),
                 applicationsCount = applications.size,
                 assignmentsCount = assignments.size,
+                payoutsCount = payouts.size,
+                payouts = payouts.toUiModels(),
                 activeAssignment = assignments.toActiveAssignmentUiModel(latestShifts),
                 hasLoadedAtLeastOnce = true
             )
@@ -300,6 +327,25 @@ class WorkerViewModel(
             locationLabel = shift?.let { "Location: ${it.locationId}" } ?: "Location unavailable",
             statusLabel = activeAssignment.rawStatus.replaceFirstChar { it.uppercase() }
         )
+    }
+
+    private fun List<Payout>.toUiModels(): List<WorkerPayoutUiModel> = map { payout ->
+        WorkerPayoutUiModel(
+            id = payout.id,
+            shortId = payout.id.takeLast(8),
+            assignmentId = payout.assignmentId,
+            amountLabel = "$${"%.2f".format(payout.amountCents / 100.0)}",
+            statusLabel = payout.status.toWorkerLabel(),
+            note = payout.note?.takeIf { it.isNotBlank() }
+        )
+    }
+
+    private fun PayoutStatus.toWorkerLabel(): String = when (this) {
+        PayoutStatus.CREATED -> "Создана"
+        PayoutStatus.PENDING -> "В обработке"
+        PayoutStatus.PAID -> "Выплачено"
+        PayoutStatus.FAILED -> "Ошибка выплаты"
+        PayoutStatus.UNKNOWN -> "Неизвестный статус"
     }
 
     class Factory(
