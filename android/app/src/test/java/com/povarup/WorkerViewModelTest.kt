@@ -79,7 +79,7 @@ class WorkerViewModelTest {
             advanceUntilIdle()
 
             assertFalse(vm.uiState.value.isLoggedIn)
-            assertTrue(vm.uiState.value.errorMessage?.contains("worker accounts only") == true)
+            assertTrue(vm.uiState.value.message?.text?.contains("worker accounts only") == true)
             assertEquals(1, repo.logoutCalls)
         } finally {
             Dispatchers.resetMain()
