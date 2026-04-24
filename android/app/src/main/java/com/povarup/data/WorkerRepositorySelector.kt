@@ -96,6 +96,7 @@ class WorkerRepositorySelector(
 
     companion object {
         fun isDemoSession(session: SessionToken): Boolean =
-            session.token.startsWith(DemoMarketplaceRepository.DEMO_TOKEN_PREFIX)
+            session.token.startsWith(DemoMarketplaceRepository.DEMO_TOKEN_PREFIX) ||
+                session.token.startsWith(DemoMarketplaceRepository.DEMO_BUSINESS_TOKEN_PREFIX)
     }
 }

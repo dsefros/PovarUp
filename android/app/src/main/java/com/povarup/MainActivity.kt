@@ -5,7 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import com.povarup.core.BusinessDemoViewModel
+import com.povarup.core.BusinessViewModel
 import com.povarup.core.RootViewModel
 import com.povarup.core.WorkerViewModel
 import com.povarup.data.ApiMarketplaceRepository
@@ -29,8 +29,8 @@ class MainActivity : ComponentActivity() {
         WorkerViewModel.Factory(repository = repository)
     }
 
-    private val businessDemoViewModel: BusinessDemoViewModel by viewModels {
-        BusinessDemoViewModel.Factory()
+    private val businessViewModel: BusinessViewModel by viewModels {
+        BusinessViewModel.Factory(repository = repository)
     }
 
     private val rootViewModel: RootViewModel by viewModels()
@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PovarUpApp(
                 viewModel = viewModel,
-                businessDemoViewModel = businessDemoViewModel,
+                businessViewModel = businessViewModel,
                 rootViewModel = rootViewModel,
                 onOpenLegacyDashboard = ::openLegacyDashboard
             )
@@ -58,6 +58,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         internal fun shouldOpenLegacy(hasSession: Boolean, currentRoleRaw: String): Boolean =
-            hasSession && UserRole.from(currentRoleRaw) in setOf(UserRole.BUSINESS, UserRole.ADMIN)
+            hasSession && UserRole.from(currentRoleRaw) == UserRole.ADMIN
     }
 }

@@ -10,23 +10,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.povarup.core.BusinessDemoViewModel
+import com.povarup.core.BusinessViewModel
 import com.povarup.core.RootContent
 import com.povarup.core.RootEntryMode
 import com.povarup.core.RootViewModel
 import com.povarup.core.WorkerViewModel
 import com.povarup.core.resolveRootContent
-import com.povarup.ui.business.BusinessDemoScreen
+import com.povarup.ui.business.BusinessNavHost
 
 @Composable
 fun PovarUpApp(
     viewModel: WorkerViewModel,
-    businessDemoViewModel: BusinessDemoViewModel,
+    businessViewModel: BusinessViewModel,
     rootViewModel: RootViewModel,
     onOpenLegacyDashboard: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val businessState by businessDemoViewModel.uiState.collectAsStateWithLifecycle()
+    val businessState by businessViewModel.uiState.collectAsStateWithLifecycle()
     val mode by rootViewModel.mode.collectAsStateWithLifecycle()
 
     MaterialTheme {
@@ -55,7 +55,7 @@ fun PovarUpApp(
                         },
                         onContinueAsDemoBusiness = {
                             rootViewModel.setMode(RootEntryMode.DEMO_BUSINESS)
-                            businessDemoViewModel.enterDemoBusiness()
+                            businessViewModel.enterBusiness()
                         },
                         onOpenLegacyDashboard = onOpenLegacyDashboard
                     )
@@ -74,23 +74,33 @@ fun PovarUpApp(
                         }
                     )
 
-                    RootContent.DEMO_BUSINESS -> BusinessDemoScreen(
+                    RootContent.DEMO_BUSINESS -> BusinessNavHost(
                         state = businessState,
-                        onBackToWelcome = { rootViewModel.setMode(RootEntryMode.WELCOME) },
-                        onTitleChanged = businessDemoViewModel::onTitleChanged,
-                        onLocationChanged = businessDemoViewModel::onLocationChanged,
-                        onStartAtChanged = businessDemoViewModel::onStartAtChanged,
-                        onEndAtChanged = businessDemoViewModel::onEndAtChanged,
-                        onPayChanged = businessDemoViewModel::onPayChanged,
-                        onWorkTypeChanged = businessDemoViewModel::onWorkTypeChanged,
-                        onCookCuisineChanged = businessDemoViewModel::onCookCuisineChanged,
-                        onCookStationChanged = businessDemoViewModel::onCookStationChanged,
-                        onBanquetChanged = businessDemoViewModel::onBanquetChanged,
-                        onDishwasherZoneChanged = businessDemoViewModel::onDishwasherZoneChanged,
-                        onCreateShift = businessDemoViewModel::createShift,
-                        onOpenShift = businessDemoViewModel::openShift,
-                        onDismissMessage = businessDemoViewModel::dismissMessage,
-                        onCloseDetails = businessDemoViewModel::closeShiftDetails
+                        statusLabel = businessViewModel::statusLabel,
+                        workTypeDetails = businessViewModel::workTypeDetails,
+                        canPublish = businessViewModel::canPublish,
+                        canClose = businessViewModel::canClose,
+                        canCancel = businessViewModel::canCancel,
+                        onRefresh = businessViewModel::refreshShifts,
+                        onCreateShift = businessViewModel::createDraftShift,
+                        onPublish = businessViewModel::publishShift,
+                        onClose = businessViewModel::closeShift,
+                        onCancel = businessViewModel::cancelShift,
+                        onDismissMessage = businessViewModel::dismissMessage,
+                        onBackToWelcome = {
+                            businessViewModel.logout()
+                            rootViewModel.setMode(RootEntryMode.WELCOME)
+                        },
+                        onTitleChanged = businessViewModel::onTitleChanged,
+                        onLocationChanged = businessViewModel::onLocationIdChanged,
+                        onStartAtChanged = businessViewModel::onStartAtChanged,
+                        onEndAtChanged = businessViewModel::onEndAtChanged,
+                        onPayChanged = businessViewModel::onPayChanged,
+                        onWorkTypeChanged = businessViewModel::onWorkTypeChanged,
+                        onCookCuisineChanged = businessViewModel::onCookCuisineChanged,
+                        onCookStationChanged = businessViewModel::onCookStationChanged,
+                        onBanquetChanged = businessViewModel::onBanquetChanged,
+                        onDishwasherZoneChanged = businessViewModel::onDishwasherZoneChanged
                     )
                 }
             }

@@ -6,8 +6,8 @@ import org.junit.Test
 
 class MainActivityEntryTest {
     @Test
-    fun routesBusinessOrAdminSessionToLegacy() {
-        assertTrue(MainActivity.shouldOpenLegacy(hasSession = true, currentRoleRaw = "business"))
+    fun routesOnlyAdminSessionToLegacy() {
+        assertFalse(MainActivity.shouldOpenLegacy(hasSession = true, currentRoleRaw = "business"))
         assertTrue(MainActivity.shouldOpenLegacy(hasSession = true, currentRoleRaw = "admin"))
     }
 

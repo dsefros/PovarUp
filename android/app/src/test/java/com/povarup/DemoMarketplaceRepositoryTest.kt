@@ -5,6 +5,7 @@ import com.povarup.data.InMemorySessionStore
 import com.povarup.domain.CookCuisine
 import com.povarup.domain.CookStation
 import com.povarup.domain.DishwasherZone
+import com.povarup.domain.ShiftStatus
 import com.povarup.domain.WorkType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -88,5 +89,26 @@ class DemoMarketplaceRepositoryTest {
 
         val dishwasherShifts = shifts.filter { it.workType == WorkType.DISHWASHER }.sortedBy { it.id }
         assertEquals(setOf(DishwasherZone.WHITE, DishwasherZone.BLACK), dishwasherShifts.map { it.dishwasherZone }.toSet())
+    }
+
+    @Test
+    fun businessLifecycleFlowWorksForDemoBusinessSession() {
+        val repository = DemoMarketplaceRepository(InMemorySessionStore())
+        repository.login(DemoMarketplaceRepository.DEMO_BUSINESS_USER_ID, DemoMarketplaceRepository.DEMO_BUSINESS_PASSWORD)
+
+        val created = repository.createShift(
+            com.povarup.data.CreateShiftRequest(
+                locationId = "Center",
+                title = "New Demo Shift",
+                startAt = "2026-06-01 10:00",
+                endAt = "2026-06-01 18:00",
+                payRateCents = 3000
+            )
+        ).getOrThrow()
+
+        assertEquals(ShiftStatus.DRAFT, created.status)
+        assertEquals(ShiftStatus.PUBLISHED, repository.publishShift(created.id).getOrThrow().status)
+        assertEquals(ShiftStatus.CLOSED, repository.closeShift(created.id).getOrThrow().status)
+        assertEquals(ShiftStatus.CANCELLED, repository.cancelShift(created.id).getOrThrow().status)
     }
 }

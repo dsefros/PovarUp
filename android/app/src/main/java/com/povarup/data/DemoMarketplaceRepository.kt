@@ -27,6 +27,36 @@ class DemoMarketplaceRepository(
             )
         )
     )
+    private val businessShifts = mutableListOf(
+        Shift(
+            id = "demo-business-shift-1",
+            businessId = DEMO_BUSINESS_USER_ID,
+            locationId = "Nevsky Garden · Manhattan",
+            title = "Banquet Head Cook",
+            startAt = "2026-05-10 10:00",
+            endAt = "2026-05-10 18:00",
+            payRateCents = 3400,
+            status = ShiftStatus.DRAFT,
+            rawStatus = "draft",
+            workType = WorkType.COOK,
+            cookCuisine = CookCuisine.RUSSIAN,
+            cookStation = CookStation.HOT,
+            isBanquet = true
+        ),
+        Shift(
+            id = "demo-business-shift-2",
+            businessId = DEMO_BUSINESS_USER_ID,
+            locationId = "Belle Époque · SoHo",
+            title = "Floor Waiter",
+            startAt = "2026-05-12 12:00",
+            endAt = "2026-05-12 20:00",
+            payRateCents = 2500,
+            status = ShiftStatus.PUBLISHED,
+            rawStatus = "published",
+            workType = WorkType.WAITER,
+            isBanquet = false
+        )
+    )
 
     override fun currentRole(): String = role
 
@@ -39,16 +69,16 @@ class DemoMarketplaceRepository(
     override fun currentSession(): SessionToken? = sessionStore.load()
 
     override fun login(userId: String, password: String): Result<SessionToken> {
-        if (userId != DEMO_USER_ID || password != DEMO_PASSWORD) {
-            return Result.failure(IllegalArgumentException("Invalid demo credentials"))
+        val token = when {
+            userId == DEMO_USER_ID && password == DEMO_PASSWORD -> SessionToken(token = DEMO_TOKEN, userId = DEMO_USER_ID, role = UserRole.WORKER.asApiValue())
+            userId == DEMO_BUSINESS_USER_ID && password == DEMO_BUSINESS_PASSWORD -> SessionToken(token = DEMO_BUSINESS_TOKEN, userId = DEMO_BUSINESS_USER_ID, role = UserRole.BUSINESS.asApiValue())
+            else -> return Result.failure(IllegalArgumentException("Invalid demo credentials"))
         }
 
-        return Result.success(
-            SessionToken(token = DEMO_TOKEN, userId = DEMO_USER_ID, role = UserRole.WORKER.asApiValue()).also {
-                sessionStore.save(it)
-                setRole(it.role)
-            }
-        )
+        return Result.success(token.also {
+            sessionStore.save(it)
+            setRole(it.role)
+        })
     }
 
     override fun logout(): Result<Unit> {
@@ -113,19 +143,55 @@ class DemoMarketplaceRepository(
 
     override fun checkOut(assignmentId: String): Result<Unit> = unsupported()
 
-    override fun createShift(input: CreateShiftRequest): Result<Shift> = unsupported()
+    override fun createShift(input: CreateShiftRequest): Result<Shift> {
+        val session = currentSession() ?: return notAuthenticated()
+        if (UserRole.from(session.role) != UserRole.BUSINESS) return Result.failure(IllegalStateException("Business role required"))
+        if (input.title.isBlank()) return Result.failure(IllegalArgumentException("Title is required"))
+        if (input.locationId.isBlank()) return Result.failure(IllegalArgumentException("Location is required"))
+        if (input.payRateCents <= 0) return Result.failure(IllegalArgumentException("Pay must be positive"))
 
-    override fun listBusinessShifts(): Result<List<Shift>> = unsupported()
+        val created = Shift(
+            id = "demo-business-shift-${businessShifts.size + 1}",
+            businessId = session.userId,
+            locationId = input.locationId,
+            title = input.title,
+            startAt = input.startAt,
+            endAt = input.endAt,
+            payRateCents = input.payRateCents,
+            status = ShiftStatus.DRAFT,
+            rawStatus = "draft"
+        )
+        businessShifts.add(0, created)
+        return Result.success(created)
+    }
+
+    override fun listBusinessShifts(): Result<List<Shift>> {
+        val session = currentSession() ?: return notAuthenticated()
+        if (UserRole.from(session.role) != UserRole.BUSINESS) return Result.failure(IllegalStateException("Business role required"))
+        return Result.success(businessShifts.filter { it.businessId == session.userId })
+    }
 
     override fun listShiftApplications(shiftId: String): Result<List<Application>> = unsupported()
 
     override fun offerAssignment(applicationId: String): Result<Assignment> = unsupported()
 
-    override fun publishShift(shiftId: String): Result<Shift> = unsupported()
+    override fun publishShift(shiftId: String): Result<Shift> = transitionShift(
+        shiftId = shiftId,
+        from = setOf(ShiftStatus.DRAFT),
+        to = ShiftStatus.PUBLISHED
+    )
 
-    override fun closeShift(shiftId: String): Result<Shift> = unsupported()
+    override fun closeShift(shiftId: String): Result<Shift> = transitionShift(
+        shiftId = shiftId,
+        from = setOf(ShiftStatus.PUBLISHED),
+        to = ShiftStatus.CLOSED
+    )
 
-    override fun cancelShift(shiftId: String): Result<Shift> = unsupported()
+    override fun cancelShift(shiftId: String): Result<Shift> = transitionShift(
+        shiftId = shiftId,
+        from = setOf(ShiftStatus.DRAFT, ShiftStatus.PUBLISHED, ShiftStatus.CLOSED),
+        to = ShiftStatus.CANCELLED
+    )
 
     override fun cancelAssignment(assignmentId: String): Result<Assignment> = unsupported()
 
@@ -144,6 +210,19 @@ class DemoMarketplaceRepository(
     private fun applicationsForWorker(workerId: String): MutableList<Application> =
         applicationsByWorker.getOrPut(workerId) { mutableListOf() }
 
+    private fun transitionShift(shiftId: String, from: Set<ShiftStatus>, to: ShiftStatus): Result<Shift> {
+        val session = currentSession() ?: return notAuthenticated()
+        if (UserRole.from(session.role) != UserRole.BUSINESS) return Result.failure(IllegalStateException("Business role required"))
+        val index = businessShifts.indexOfFirst { it.id == shiftId && it.businessId == session.userId }
+        if (index == -1) return Result.failure(IllegalArgumentException("Shift not found"))
+        val current = businessShifts[index]
+        if (current.status !in from) return Result.failure(IllegalStateException("Shift transition is not allowed"))
+
+        val updated = current.copy(status = to, rawStatus = to.name.lowercase())
+        businessShifts[index] = updated
+        return Result.success(updated)
+    }
+
     private fun <T> unsupported(): Result<T> =
         Result.failure(NotImplementedError("Not implemented in worker demo repository"))
 
@@ -155,6 +234,10 @@ class DemoMarketplaceRepository(
         const val DEMO_PASSWORD = "workerpass"
         const val DEMO_TOKEN_PREFIX = "demo-worker-session"
         private const val DEMO_TOKEN = "$DEMO_TOKEN_PREFIX-v1"
+        const val DEMO_BUSINESS_USER_ID = "business.demo"
+        const val DEMO_BUSINESS_PASSWORD = "businesspass"
+        const val DEMO_BUSINESS_TOKEN_PREFIX = "demo-business-session"
+        private const val DEMO_BUSINESS_TOKEN = "$DEMO_BUSINESS_TOKEN_PREFIX-v1"
 
         private val DEMO_SHIFTS = listOf(
             Shift(
